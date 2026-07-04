@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OmniCore ERP — Enterprise Suite</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "background":                "rgb(var(--background) / <alpha-value>)",
+          "surface":                   "rgb(var(--surface) / <alpha-value>)",
+          "surface-dim":               "rgb(var(--surface-dim) / <alpha-value>)",
+          "surface-container-lowest":  "rgb(var(--surface-container-lowest) / <alpha-value>)",
+          "surface-container-low":     "rgb(var(--surface-container-low) / <alpha-value>)",
+          "surface-container":         "rgb(var(--surface-container) / <alpha-value>)",
+          "surface-container-high":    "rgb(var(--surface-container-high) / <alpha-value>)",
+          "surface-container-highest": "rgb(var(--surface-container-highest) / <alpha-value>)",
+          "on-background":             "rgb(var(--on-surface) / <alpha-value>)",
+          "on-surface":                "rgb(var(--on-surface) / <alpha-value>)",
+          "on-surface-variant":        "rgb(var(--on-surface-variant) / <alpha-value>)",
+          "outline":                   "rgb(var(--outline) / <alpha-value>)",
+          "outline-variant":           "rgb(var(--outline-variant) / <alpha-value>)",
+          "primary":                   "rgb(var(--primary) / <alpha-value>)",
+          "on-primary":                "rgb(var(--on-primary) / <alpha-value>)",
+          "primary-container":         "rgb(var(--primary-container) / <alpha-value>)",
+          "on-primary-container":      "rgb(var(--on-primary-container) / <alpha-value>)",
+          "secondary":                 "rgb(var(--secondary) / <alpha-value>)",
+          "secondary-container":       "rgb(var(--secondary-container) / <alpha-value>)",
+          "on-secondary-container":    "rgb(var(--on-secondary-container) / <alpha-value>)",
+          "success":                   "rgb(var(--success) / <alpha-value>)",
+          "warning":                   "rgb(var(--warning) / <alpha-value>)",
+          "error":                     "rgb(var(--error) / <alpha-value>)",
+          "on-error":                  "rgb(var(--on-error) / <alpha-value>)",
+          "indigo-acc":                "rgb(var(--indigo-acc) / <alpha-value>)",
+          "purple-acc":                "rgb(var(--purple-acc) / <alpha-value>)",
+          "cyan-acc":                  "rgb(var(--cyan-acc) / <alpha-value>)"
+        },
+        borderRadius: {
+          "DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "2xl": "1.25rem", "3xl": "1.5rem", "full": "9999px"
+        },
+        spacing: {
+          "xs": "4px", "sm": "8px", "md": "16px", "lg": "24px", "xl": "40px",
+          "gutter": "16px", "sidebar-width": "260px"
+        },
+        fontSize: {
+          "display-lg":  ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+          "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+          "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+          "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+          "body-lg":     ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+          "body-md":     ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+          "label-md":    ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+          "label-sm":    ["11px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+        },
+        boxShadow: {
+          "soft": "0px 4px 12px rgba(0,0,0,0.05)",
+          "overlay": "0px 12px 40px rgba(0,0,0,0.35)",
+          "glow": "0 4px 20px rgb(var(--indigo-acc) / .35)"
+        }
+      }
+    }
+  }
+</script>
+<link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body class="bg-background text-on-background antialiased">
+
+<!-- ============ PANTALLA DE CARGA ============ -->
+<div id="boot-screen" class="fixed inset-0 z-[130] flex flex-col items-center justify-center bg-background gap-md">
+  <div class="w-14 h-14 rounded-2xl brand-gradient flex items-center justify-center text-white shadow-glow">
+    <span class="material-symbols-outlined text-[30px]">hub</span>
+  </div>
+  <div class="w-10 h-10 rounded-full border-4 border-outline-variant/30 border-t-indigo-acc spinner"></div>
+  <p class="text-body-md text-on-surface-variant">Conectando con la base de datos…</p>
+</div>
+
+<!-- ============ SETUP: CONEXIÓN A SUPABASE ============ -->
+<div id="setup-screen" class="hidden fixed inset-0 z-[120] bg-background p-md overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center">
+  <div class="w-full max-w-xl space-y-lg py-lg">
+    <div class="text-center space-y-sm">
+      <div class="w-14 h-14 mx-auto rounded-2xl brand-gradient flex items-center justify-center text-white shadow-glow">
+        <span class="material-symbols-outlined text-[30px]">hub</span>
+      </div>
+      <h1 class="text-headline-lg text-on-surface">Conecta tu base de datos</h1>
+      <p class="text-body-md text-on-surface-variant max-w-md mx-auto">OmniCore ERP guarda todos los datos en <b>Supabase</b> (Postgres en la nube, gratis). Solo necesitas hacerlo una vez.</p>
+    </div>
+    <div class="card p-lg space-y-md">
+      <ol class="space-y-sm text-body-md text-on-surface-variant list-none">
+        <li class="flex gap-sm items-start"><span class="step-num">1</span><span>Crea un proyecto gratis en <a href="https://supabase.com" target="_blank" class="text-indigo-acc font-semibold hover:underline">supabase.com</a></span></li>
+        <li class="flex gap-sm items-start"><span class="step-num">2</span><span>Abre <b>SQL Editor</b> → pega el contenido de <code class="px-1.5 py-0.5 rounded bg-surface-container-high text-[12px]">supabase/schema.sql</code> → <b>Run</b></span></li>
+        <li class="flex gap-sm items-start"><span class="step-num">3</span><span>Copia de <b>Settings → API</b> la URL del proyecto y la clave <b>anon public</b>, y pégalas aquí:</span></li>
+      </ol>
+      <form id="setup-form" class="space-y-md pt-sm">
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Project URL</span>
+          <input id="setup-url" required class="input-field mt-xs" placeholder="https://xxxxx.supabase.co"/></label>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Anon public key</span>
+          <input id="setup-key" required class="input-field mt-xs" placeholder="eyJhbGciOi..."/></label>
+        <button type="submit" class="btn-primary w-full justify-center py-3" id="setup-connect">
+          <span class="material-symbols-outlined text-[20px]">cloud_done</span> Conectar y continuar
+        </button>
+        <p id="setup-error" class="hidden text-body-md text-error bg-error/10 border border-error/20 rounded-lg px-md py-sm"></p>
+      </form>
+    </div>
+    <div class="text-center">
+      <button id="setup-local" class="text-body-md text-on-surface-variant hover:text-on-surface transition-colors underline decoration-outline-variant underline-offset-4">
+        Continuar sin conexión (modo demo local)
+      </button>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ============ AUTH: LOGIN / REGISTRO ============ -->
+<div id="login-screen" class="hidden fixed inset-0 z-[100] flex bg-background">
+  <!-- Left: brand gradient panel -->
+  <div class="hidden lg:flex w-1/2 relative overflow-hidden login-gradient flex-col justify-between p-xl text-white">
+    <div class="relative z-10 flex items-center gap-sm">
+      <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center border border-white/20">
+        <span class="material-symbols-outlined">hub</span>
+      </div>
+      <div>
+        <h1 class="text-headline-sm font-bold leading-none">OmniCore ERP</h1>
+        <span class="text-label-md text-white/70">Enterprise Suite</span>
+      </div>
+    </div>
+    <div class="relative z-10 max-w-md space-y-md">
+      <h2 class="text-display-lg">Toda tu operación,<br/>una sola plataforma.</h2>
+      <p class="text-body-lg text-white/80">Finanzas, inventario, ventas, RRHH y CRM unificados con analítica en tiempo real, roles por usuario y datos seguros en la nube.</p>
+      <div class="flex gap-md pt-md flex-wrap">
+        <div class="glass-chip"><span class="material-symbols-outlined text-[18px]">database</span> Postgres · Supabase</div>
+        <div class="glass-chip"><span class="material-symbols-outlined text-[18px]">verified_user</span> Row Level Security</div>
+      </div>
+    </div>
+    <p class="relative z-10 text-label-md text-white/50">© 2026 OmniCore Systems · Global Operations</p>
+    <div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
+  </div>
+
+  <!-- Right: forms -->
+  <div class="flex-1 flex items-center justify-center p-lg overflow-y-auto">
+    <div class="w-full max-w-sm space-y-lg">
+      <div class="flex gap-xs bg-surface-container rounded-xl p-1">
+        <button class="tab-btn active flex-1" data-auth-tab="login">Iniciar sesión</button>
+        <button class="tab-btn flex-1" data-auth-tab="register">Crear cuenta</button>
+      </div>
+
+      <!-- LOGIN -->
+      <form id="login-form" class="space-y-md" autocomplete="on">
+        <div>
+          <h2 class="text-headline-lg text-on-surface">Bienvenido de nuevo</h2>
+          <p class="text-body-md text-on-surface-variant mt-xs">Inicia sesión en tu espacio de trabajo <span id="mode-indicator" class="badge badge-info align-middle"></span></p>
+        </div>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Correo</span>
+          <input id="login-email" type="email" required class="input-field mt-xs" placeholder="tu@empresa.com"/></label>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Contraseña</span>
+          <input id="login-pass" type="password" required class="input-field mt-xs" placeholder="••••••••"/></label>
+        <div class="flex items-center justify-between text-body-md">
+          <label class="flex items-center gap-xs cursor-pointer text-on-surface-variant">
+            <input type="checkbox" checked class="rounded border-outline-variant bg-surface-container text-indigo-acc focus:ring-indigo-acc/40"/> Recordarme
+          </label>
+          <a href="#" class="text-indigo-acc hover:underline font-medium">¿Olvidaste tu contraseña?</a>
+        </div>
+        <button type="submit" class="btn-primary w-full justify-center py-3" id="login-submit">
+          <span class="material-symbols-outlined text-[20px]">login</span> Iniciar sesión
+        </button>
+        <p id="login-error" class="hidden text-body-md text-error bg-error/10 border border-error/20 rounded-lg px-md py-sm"></p>
+      </form>
+
+      <!-- REGISTRO -->
+      <form id="register-form" class="hidden space-y-md" autocomplete="off">
+        <div>
+          <h2 class="text-headline-lg text-on-surface">Crea tu cuenta</h2>
+          <p class="text-body-md text-on-surface-variant mt-xs">El primer usuario registrado será <b>administrador</b>; los siguientes entran como empleados y el admin les asigna su rol.</p>
+        </div>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Nombre completo</span>
+          <input id="reg-name" required minlength="3" class="input-field mt-xs" placeholder="Ana Rodríguez"/></label>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Correo</span>
+          <input id="reg-email" type="email" required class="input-field mt-xs" placeholder="tu@empresa.com"/></label>
+        <div class="grid grid-cols-2 gap-md">
+          <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Contraseña</span>
+            <input id="reg-pass" type="password" required minlength="6" class="input-field mt-xs" placeholder="Mín. 6"/></label>
+          <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Confirmar</span>
+            <input id="reg-pass2" type="password" required minlength="6" class="input-field mt-xs" placeholder="Repítela"/></label>
+        </div>
+        <button type="submit" class="btn-primary w-full justify-center py-3" id="register-submit">
+          <span class="material-symbols-outlined text-[20px]">person_add</span> Registrarme
+        </button>
+        <p id="register-error" class="hidden text-body-md text-error bg-error/10 border border-error/20 rounded-lg px-md py-sm"></p>
+      </form>
+
+      <button id="change-backend" class="w-full text-center text-label-md text-on-surface-variant/70 hover:text-on-surface transition-colors">
+        <span class="material-symbols-outlined text-[14px] align-middle">database</span> Cambiar conexión de base de datos
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app" class="hidden">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="h-screen w-sidebar-width fixed left-0 top-0 bg-surface-container-lowest flex flex-col py-md border-r border-outline-variant/30 z-50 transition-all duration-300">
+    <div class="px-lg mb-lg flex items-center gap-sm shrink-0">
+      <div class="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center text-white shrink-0 shadow-glow">
+        <span class="material-symbols-outlined">hub</span>
+      </div>
+      <div class="sidebar-label overflow-hidden">
+        <h1 class="text-headline-sm font-bold text-on-surface leading-none whitespace-nowrap">OmniCore <span class="text-grad">ERP</span></h1>
+        <span class="text-label-md text-on-surface-variant whitespace-nowrap" id="company-name">Global Operations</span>
+      </div>
+    </div>
+    <nav id="sidebar-nav" class="flex-1 px-sm space-y-xs overflow-y-auto"></nav>
+    <div class="mt-auto px-sm pt-md border-t border-outline-variant/20 space-y-xs shrink-0">
+      <button id="theme-toggle" class="nav-item w-full">
+        <span class="material-symbols-outlined" id="theme-icon">light_mode</span>
+        <span class="sidebar-label text-body-md">Modo claro</span>
+      </button>
+      <button id="sidebar-collapse" class="nav-item w-full">
+        <span class="material-symbols-outlined" id="collapse-icon">left_panel_close</span>
+        <span class="sidebar-label text-body-md">Colapsar</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Topbar -->
+  <header id="topbar" class="fixed top-0 right-0 h-16 bg-surface-dim/80 backdrop-blur-md flex justify-between items-center px-lg border-b border-outline-variant/30 z-40 transition-all duration-300">
+    <div class="flex items-center gap-lg min-w-0">
+      <div class="relative w-72 hidden md:block">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+        <input id="global-search" class="input-field pl-10 py-1.5" placeholder="Búsqueda global...  (Ctrl+K)" type="text"/>
+        <div id="search-results" class="hidden absolute top-11 left-0 w-[420px] max-h-96 overflow-y-auto rounded-xl bg-surface-container-high border border-outline-variant/30 shadow-overlay p-sm z-50"></div>
+      </div>
+      <nav id="breadcrumbs" class="flex items-center gap-xs text-body-md text-on-surface-variant whitespace-nowrap overflow-hidden"></nav>
+    </div>
+    <div class="flex items-center gap-md">
+      <span id="db-status" class="hidden xl:inline-flex badge badge-success" title="Estado de la base de datos"></span>
+      <button id="btn-new-tx" class="btn-primary hidden sm:flex">
+        <span class="material-symbols-outlined text-[18px]">add</span> Nueva Transacción
+      </button>
+      <div class="flex items-center gap-xs border-l border-outline-variant/30 pl-md">
+        <div class="relative">
+          <button id="btn-notifications" class="icon-btn relative">
+            <span class="material-symbols-outlined">notifications</span>
+            <span id="notif-dot" class="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-0.5 bg-error text-on-error rounded-full border-2 border-surface text-[9px] font-bold flex items-center justify-center">0</span>
+          </button>
+          <div id="notif-panel" class="hidden absolute right-0 top-12 w-96 rounded-xl bg-surface-container-high border border-outline-variant/30 shadow-overlay z-50 overflow-hidden"></div>
+        </div>
+        <button id="btn-widgets" class="icon-btn" title="Panel de widgets">
+          <span class="material-symbols-outlined">right_panel_open</span>
+        </button>
+        <div class="relative">
+          <button id="btn-profile" class="ml-sm w-9 h-9 rounded-full brand-gradient text-white font-bold text-[12px] flex items-center justify-center hover:ring-2 hover:ring-indigo-acc/50 transition-all">?</button>
+          <div id="profile-panel" class="hidden absolute right-0 top-12 w-64 rounded-xl bg-surface-container-high border border-outline-variant/30 shadow-overlay z-50 overflow-hidden"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main id="main" class="pt-16 min-h-screen bg-background transition-all duration-300">
+    <div id="view" class="max-w-[1440px] mx-auto p-lg lg:p-xl space-y-lg page-enter"></div>
+  </main>
+
+  <!-- Right widgets panel -->
+  <aside id="widgets-panel" class="fixed top-16 right-0 bottom-0 w-[340px] bg-surface-container-lowest border-l border-outline-variant/30 z-40 translate-x-full transition-transform duration-300 overflow-y-auto"></aside>
+</div>
+
+<!-- Overlays -->
+<div id="modal-root"></div>
+<div id="toast-root" class="fixed bottom-lg right-lg z-[125] space-y-sm w-[360px]"></div>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/db.js"></script>
+<script src="js/components.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
