@@ -1,57 +1,38 @@
-# OmniCore ERP — Enterprise Suite
+# 🚀 OmniCore ERP
 
-Plataforma ERP SaaS para PYMEs con **base de datos online en Supabase** (Postgres + Auth), usuarios con roles, y diseño basado en el proyecto de Google Stitch *"OmniCore Enterprise ERP Suite"*.
+<p align="center">
+  <strong>A modern Enterprise Resource Planning (ERP) platform built to simplify business management and bring every essential operation together in one place.</strong>
+</p>
 
-## 🚀 Puesta en marcha (5 minutos)
+<p align="center">
+  Manage your business smarter, faster, and more efficiently.
+</p>
 
-1. **Crea la base de datos**: entra a [supabase.com](https://supabase.com) → *New project* (plan gratuito).
-2. **Ejecuta el esquema**: en el dashboard de Supabase → **SQL Editor** → pega todo el contenido de [`supabase/schema.sql`](supabase/schema.sql) → **Run**. Esto crea las 14 tablas, la seguridad (RLS), el trigger de perfiles y los datos de ejemplo.
-3. *(Recomendado)* En **Authentication → Providers → Email**, desactiva *Confirm email* para que el registro entre directo sin verificación por correo.
-4. **Sirve la app**:
-   ```bash
-   python -m http.server 8791
-   # → http://localhost:8791
-   ```
-5. Al abrir la app, pega la **Project URL** y la **anon public key** (Supabase → *Settings → API*) en la pantalla de conexión.
-6. **Regístrate**: el **primer usuario registrado se convierte en Administrador automáticamente**. Los siguientes entran como Empleados y el admin les asigna rol en **Usuarios**.
+---
 
-> Sin conexión configurada, la app ofrece un **modo demo local** (localStorage) con admin `admin@omnicore.io` / `admin1234`.
+## 🌟 About OmniCore ERP
 
-## 👥 Roles y permisos
+OmniCore ERP is a centralized business management platform designed to help small and medium-sized companies streamline their daily operations through a clean, modern, and intuitive interface.
 
-| Capacidad | Admin | Gerente | Empleado |
-|---|:-:|:-:|:-:|
-| Dashboard, ventas, inventario, compras, CRM, facturación | ✅ | ✅ | ✅ |
-| Crear registros (pedidos, facturas, productos, leads) | ✅ | ✅ | ✅ |
-| Ver salarios / RRHH / ejecutar nómina | ✅ | ✅ | ❌ |
-| Aprobar solicitudes y órdenes de compra | ✅ | ✅ | ❌ |
-| Eliminar registros | ✅ | ❌ | ❌ |
-| Gestionar usuarios y roles · Auditoría · Config. de empresa | ✅ | ❌ | ❌ |
+Instead of relying on multiple disconnected tools, OmniCore ERP provides a single workspace where businesses can organize their operations, improve collaboration between departments, and keep important information accessible in real time.
 
-## 📦 Qué incluye
+The platform supports the complete business workflow, from managing employees and customer relationships to handling inventory, purchases, sales, invoicing, and company administration. Every process is designed to be simple, efficient, and easy to use, allowing teams to focus on growing the business instead of managing paperwork.
 
-- **Auth completa**: registro, login, logout, cambio de contraseña, cuentas desactivables.
-- **12 módulos** + **Mi Perfil**, **Configuración** y **Gestión de Usuarios**.
-- **CRUD persistente en Supabase**: empleados, productos, pedidos, facturas, órdenes de compra, leads CRM (kanban drag & drop), solicitudes RRHH, notificaciones.
-- **Auditoría automática**: cada acción (login, create, update, delete, aprobaciones, nómina, exportaciones) se registra en `audit_log`.
-- Búsqueda global (Ctrl+K), notificaciones, panel de widgets, breadcrumbs, modo claro/oscuro, sidebar colapsable.
+With role-based access, each user interacts only with the information and actions relevant to their responsibilities, ensuring a secure and organized working environment.
 
-## 🗂 Estructura
+---
 
-```
-index.html            Shell + conexión + auth + config Tailwind
-css/styles.css        Design tokens light/dark + componentes + animaciones
-js/config.js          Credenciales de Supabase (opcional: la UI también las pide)
-js/db.js              Store: auth, roles/permisos, CRUD, auditoría (Supabase/local)
-js/data.js            Cache en memoria + datos semilla
-js/components.js      Librería UI (tablas, modales, charts, toasts…)
-js/views.js           Vistas de los 15 módulos
-js/app.js             Arranque, router con guards, shell
-supabase/schema.sql   Esquema completo: tablas + RLS + triggers + seeds
-```
+## 💼 What OmniCore Helps Businesses Do
 
-## 🔐 Notas de seguridad
+- 📈 Centralize daily business operations in one platform.
+- 👥 Organize employees, customers, and company information.
+- 📦 Monitor inventory and product availability.
+- 💰 Manage sales, purchases, and invoicing workflows.
+- 🤝 Strengthen customer relationship management.
+- 📊 Improve operational visibility and decision-making.
+- 🔐 Maintain secure access through user roles and permissions.
+- ⚡ Increase productivity with an intuitive and modern workspace.
 
-- La **anon key** es pública por diseño; la protección real la da **RLS** (solo usuarios autenticados acceden a los datos).
-- Las políticas actuales son de nivel demo (todo usuario autenticado lee/escribe datos de negocio; los perfiles solo los edita su dueño o un admin). Para producción, endurece las políticas por rol usando `public.is_admin()` como referencia.
-- Eliminar un usuario desde la app borra su **perfil**; la cuenta de acceso se elimina en *Supabase → Authentication → Users*.
+---
+
+> **OmniCore ERP is focused on making business management simpler, more organized, and more efficient by bringing every essential process into one unified platform.**
