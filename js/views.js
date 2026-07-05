@@ -1418,8 +1418,7 @@ const Views = {
                 <p class="font-semibold text-on-surface text-body-md">${Store.mode === "supabase" ? "Supabase (Postgres en la nube)" : "Modo local (localStorage)"}</p>
                 <p class="text-label-md text-on-surface-variant">${Store.mode === "supabase" ? "Todos los registros y usuarios se guardan online" : "Los datos solo viven en este navegador"}</p>
               </div>
-            </div>
-            ${canCompany ? `<button class="btn-ghost" id="reconfig-db">${UI.icon("database", "text-[18px]")} Cambiar conexión</button>` : ""}`)}
+            </div>`)}
         </div>
       </div>`;
 
@@ -1453,13 +1452,6 @@ const Views = {
         UI.toast("Preferencia guardada.", "info");
       });
 
-      const rc = el.querySelector("#reconfig-db");
-      if (rc) rc.onclick = () => UI.confirm({
-        title: "Cambiar conexión de base de datos",
-        message: "Se cerrará tu sesión y volverás a la pantalla de conexión para configurar otra base de datos.",
-        okLabel: "Continuar",
-        onOk: () => { localStorage.removeItem(Store.LS_BACKEND); location.reload(); }
-      });
     }
   }
 };

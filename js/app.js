@@ -34,13 +34,12 @@ const App = {
     this.bindAuthScreens();
     let state;
     try { state = await Store.init(); }
-    catch (e) { console.error(e); state = "setup"; }
+    catch (e) { console.error(e); state = "auth"; }
     document.getElementById("boot-screen").remove();
     this.show(state);
   },
 
   show(state) {
-    document.getElementById("setup-screen").classList.toggle("hidden", state !== "setup");
     document.getElementById("login-screen").classList.toggle("hidden", state !== "auth");
     if (state === "auth") {
       const ind = document.getElementById("mode-indicator");
@@ -51,32 +50,6 @@ const App = {
   },
 
   bindAuthScreens() {
-    /* --- Setup (conexión Supabase) --- */
-    document.getElementById("setup-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const url = document.getElementById("setup-url").value.trim().replace(/\/+$/, "");
-      const key = document.getElementById("setup-key").value.trim();
-      const btn = document.getElementById("setup-connect");
-      const err = document.getElementById("setup-error");
-      err.classList.add("hidden");
-      btn.disabled = true;
-      btn.innerHTML = `<span class="w-4 h-4 rounded-full border-2 border-white/40 border-t-white spinner inline-block"></span> Verificando conexión…`;
-      try {
-        await Store.testConnection(url, key);
-        Store.saveBackendConfig({ mode: "supabase", url, key });
-        location.reload();
-      } catch (ex) {
-        err.textContent = "No se pudo conectar: " + ex.message + ". Verifica la URL, la anon key y que ejecutaste schema.sql.";
-        err.classList.remove("hidden");
-        btn.disabled = false;
-        btn.innerHTML = `<span class="material-symbols-outlined text-[20px]">cloud_done</span> Conectar y continuar`;
-      }
-    });
-    document.getElementById("setup-local").onclick = () => {
-      Store.saveBackendConfig({ mode: "local" });
-      location.reload();
-    };
-
     /* --- Tabs login/registro --- */
     document.querySelectorAll("[data-auth-tab]").forEach(t => t.onclick = () => {
       document.querySelectorAll("[data-auth-tab]").forEach(x => x.classList.remove("active"));
@@ -130,10 +103,6 @@ const App = {
       }
     });
 
-    document.getElementById("change-backend").onclick = () => {
-      localStorage.removeItem(Store.LS_BACKEND);
-      location.reload();
-    };
   },
 
   transitionToApp(isNew = false) {

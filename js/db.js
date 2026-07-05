@@ -69,7 +69,6 @@ const Store = {
   async init() {
     const cfg = this.backendConfig();
     if (cfg.mode === "local") { this.mode = "local"; return this.localInit(); }
-    if (!cfg.url || !cfg.key) return "setup";
     try {
       this.mode = "supabase";
       this.sb = window.supabase.createClient(cfg.url, cfg.key);
@@ -80,7 +79,7 @@ const Store = {
       return "app";
     } catch (e) {
       console.error("Supabase init error:", e);
-      return "setup";
+      return "auth";
     }
   },
 

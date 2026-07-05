@@ -68,7 +68,7 @@
     }
   }
 </script>
-<link rel="stylesheet" href="css/styles.css"/>
+<link rel="stylesheet" href="css/styles.css?v=3"/>
 </head>
 <body class="bg-background text-on-background antialiased">
 
@@ -79,43 +79,6 @@
   </div>
   <div class="w-10 h-10 rounded-full border-4 border-outline-variant/30 border-t-indigo-acc spinner"></div>
   <p class="text-body-md text-on-surface-variant">Conectando con la base de datos…</p>
-</div>
-
-<!-- ============ SETUP: CONEXIÓN A SUPABASE ============ -->
-<div id="setup-screen" class="hidden fixed inset-0 z-[120] bg-background p-md overflow-y-auto">
-  <div class="min-h-full flex items-center justify-center">
-  <div class="w-full max-w-xl space-y-lg py-lg">
-    <div class="text-center space-y-sm">
-      <div class="w-14 h-14 mx-auto rounded-2xl brand-gradient flex items-center justify-center text-white shadow-glow">
-        <span class="material-symbols-outlined text-[30px]">hub</span>
-      </div>
-      <h1 class="text-headline-lg text-on-surface">Conecta tu base de datos</h1>
-      <p class="text-body-md text-on-surface-variant max-w-md mx-auto">OmniCore ERP guarda todos los datos en <b>Supabase</b> (Postgres en la nube, gratis). Solo necesitas hacerlo una vez.</p>
-    </div>
-    <div class="card p-lg space-y-md">
-      <ol class="space-y-sm text-body-md text-on-surface-variant list-none">
-        <li class="flex gap-sm items-start"><span class="step-num">1</span><span>Crea un proyecto gratis en <a href="https://supabase.com" target="_blank" class="text-indigo-acc font-semibold hover:underline">supabase.com</a></span></li>
-        <li class="flex gap-sm items-start"><span class="step-num">2</span><span>Abre <b>SQL Editor</b> → pega el contenido de <code class="px-1.5 py-0.5 rounded bg-surface-container-high text-[12px]">supabase/schema.sql</code> → <b>Run</b></span></li>
-        <li class="flex gap-sm items-start"><span class="step-num">3</span><span>Copia de <b>Settings → API</b> la URL del proyecto y la clave <b>anon public</b>, y pégalas aquí:</span></li>
-      </ol>
-      <form id="setup-form" class="space-y-md pt-sm">
-        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Project URL</span>
-          <input id="setup-url" required class="input-field mt-xs" placeholder="https://xxxxx.supabase.co"/></label>
-        <label class="block"><span class="text-label-md text-on-surface-variant uppercase tracking-wider">Anon public key</span>
-          <input id="setup-key" required class="input-field mt-xs" placeholder="eyJhbGciOi..."/></label>
-        <button type="submit" class="btn-primary w-full justify-center py-3" id="setup-connect">
-          <span class="material-symbols-outlined text-[20px]">cloud_done</span> Conectar y continuar
-        </button>
-        <p id="setup-error" class="hidden text-body-md text-error bg-error/10 border border-error/20 rounded-lg px-md py-sm"></p>
-      </form>
-    </div>
-    <div class="text-center">
-      <button id="setup-local" class="text-body-md text-on-surface-variant hover:text-on-surface transition-colors underline decoration-outline-variant underline-offset-4">
-        Continuar sin conexión (modo demo local)
-      </button>
-    </div>
-  </div>
-  </div>
 </div>
 
 <!-- ============ AUTH: LOGIN / REGISTRO ============ -->
@@ -195,9 +158,6 @@
         <p id="register-error" class="hidden text-body-md text-error bg-error/10 border border-error/20 rounded-lg px-md py-sm"></p>
       </form>
 
-      <button id="change-backend" class="w-full text-center text-label-md text-on-surface-variant/70 hover:text-on-surface transition-colors">
-        <span class="material-symbols-outlined text-[14px] align-middle">database</span> Cambiar conexión de base de datos
-      </button>
     </div>
   </div>
 </div>
@@ -275,11 +235,11 @@
 <div id="modal-root"></div>
 <div id="toast-root" class="fixed bottom-lg right-lg z-[125] space-y-sm w-[360px]"></div>
 
-<script src="js/config.js"></script>
-<script src="js/data.js"></script>
-<script src="js/db.js"></script>
-<script src="js/components.js"></script>
-<script src="js/views.js"></script>
-<script src="js/app.js"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/db.js?v=3"></script>
+<script src="js/components.js?v=3"></script>
+<script src="js/views.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
