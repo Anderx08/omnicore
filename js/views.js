@@ -62,18 +62,7 @@ const Views = {
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
         <div class="lg:col-span-2 card overflow-hidden">
-          <div class="px-lg py-md border-b border-outline-variant/20 flex justify-between items-center">
-            <h4 class="text-headline-sm text-on-surface">Actividad Reciente</h4>
-            ${Can.route("auditoria") ? `<button class="text-indigo-acc text-label-md hover:underline font-semibold" data-goto="auditoria">Ver todo</button>` : ""}
-          </div>
-          <div class="overflow-x-auto"><table class="data-table">
-            <thead><tr><th>Usuario</th><th>Acción</th><th>Módulo</th><th class="text-right">Fecha/Hora</th></tr></thead>
-            <tbody>${DB.audit.slice(0, 5).map((a, i) => `
-              <tr><td><span class="flex items-center gap-sm">${UI.avatar(a.username, i)} ${a.username}</span></td>
-              <td class="max-w-sm truncate">${a.detail}</td>
-              <td>${UI.badge(a.module, "info")}</td>
-              <td class="text-right text-on-surface-variant">${a.ts}</td></tr>`).join("")}
-            </tbody></table></div>
+          ${Views.dashboard.activityFeed()}
         </div>
 
         <div class="card">
@@ -119,6 +108,51 @@ const Views = {
         });
         Store.log("EXPORT", "Dashboard", "Exportación del panel ejecutivo a PDF");
       };
+    },
+
+    /* Feed del dashboard adaptado al rol:
+       - Admin: registro de auditoría completo
+       - Gerente: actividad operativa, sin módulos sensibles (Seguridad/Usuarios/Perfil)
+       - Empleado: novedades del negocio (pedidos y tratos), nunca el registro de auditoría */
+    activityFeed() {
+      const isMgmt = Can.cap("approve"); // admin o gerente
+      if (isMgmt) {
+        const sensitive = m => ["Seguridad", "Usuarios", "Perfil"].includes(m);
+        const rows = DB.audit.filter(a => Can.cap("users") || (!sensitive(a.module) && a.severity !== "critical")).slice(0, 5);
+        return `
+          <div class="px-lg py-md border-b border-outline-variant/20 flex justify-between items-center">
+            <h4 class="text-headline-sm text-on-surface">Actividad Reciente</h4>
+            ${Can.route("auditoria") ? `<button class="text-indigo-acc text-label-md hover:underline font-semibold" data-goto="auditoria">Ver todo</button>` : ""}
+          </div>
+          <div class="overflow-x-auto"><table class="data-table">
+            <thead><tr><th>Usuario</th><th>Acción</th><th>Módulo</th><th class="text-right">Fecha/Hora</th></tr></thead>
+            <tbody>${rows.length ? rows.map((a, i) => `
+              <tr><td><span class="flex items-center gap-sm">${UI.avatar(a.username, i)} ${a.username}</span></td>
+              <td class="max-w-sm truncate">${a.detail}</td>
+              <td>${UI.badge(a.module, "info")}</td>
+              <td class="text-right text-on-surface-variant">${a.ts}</td></tr>`).join("")
+              : `<tr><td colspan="4" class="text-center py-xl text-on-surface-variant">Sin actividad reciente</td></tr>`}
+            </tbody></table></div>`;
+      }
+      // Empleado → novedades del negocio (sin datos sensibles ni auditoría)
+      const news = [
+        ...DB.orders.slice(0, 4).map(o => ({ icon: "receipt_long", color: "cyan", title: `Pedido ${o.id}`, sub: `${o.customer} · ${fmt.money(o.total)}`, badge: o.status })),
+        ...DB.crm.deals.filter(d => d.stage === "Ganado").slice(0, 2).map(d => ({ icon: "handshake", color: "success", title: `Trato ganado: ${d.company}`, sub: fmt.moneyShort(d.value), badge: "Ganado" }))
+      ].slice(0, 5);
+      return `
+        <div class="px-lg py-md border-b border-outline-variant/20 flex justify-between items-center">
+          <h4 class="text-headline-sm text-on-surface">Novedades del equipo</h4>
+        </div>
+        <div class="p-md space-y-sm">
+          ${news.length ? news.map(n => `
+            <div class="flex items-center gap-md p-sm rounded-lg hover:bg-surface-container/60 transition-colors">
+              <div class="p-2 rounded-lg bg-${n.color === "cyan" ? "cyan-acc" : n.color}/10 text-${n.color === "cyan" ? "cyan-acc" : n.color}">${UI.icon(n.icon, "text-[20px]")}</div>
+              <div class="flex-1 min-w-0"><p class="text-body-md font-medium text-on-surface truncate">${n.title}</p>
+              <p class="text-label-md text-on-surface-variant truncate">${n.sub}</p></div>
+              ${UI.badge(n.badge)}
+            </div>`).join("")
+            : `<p class="text-body-md text-on-surface-variant text-center py-lg">Sin novedades por ahora</p>`}
+        </div>`;
     }
   },
 

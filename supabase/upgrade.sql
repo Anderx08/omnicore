@@ -101,12 +101,18 @@ begin
   end loop;
 end $$;
 
--- Auditoría: solo insertar y leer; nadie edita ni borra (inmutable)
+-- Auditoría: inmutable (nadie edita ni borra) y lectura restringida por rol:
+--   admin → todo · gerente → operativo no sensible · empleado → solo lo suyo
 alter table public.audit_log enable row level security;
 drop policy if exists "audit_log_all" on public.audit_log;
 drop policy if exists "audit_log_select" on public.audit_log;
 drop policy if exists "audit_log_insert" on public.audit_log;
-create policy "audit_log_select" on public.audit_log for select to authenticated using (true);
+create policy "audit_log_select" on public.audit_log for select to authenticated
+  using (
+    public.is_admin()
+    or (public.is_manager() and module not in ('Seguridad','Usuarios','Perfil'))
+    or (username = split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1))
+  );
 create policy "audit_log_insert" on public.audit_log for insert to authenticated with check (true);
 
 -- Settings: leer todos, editar solo admin
