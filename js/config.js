@@ -1,14 +1,11 @@
 /* ==========================================================================
-   OmniCore ERP — Configuración de backend
-   Para conectar la base de datos online (Supabase):
-     1. Crea un proyecto gratis en https://supabase.com
-     2. Ejecuta supabase/schema.sql en el SQL Editor del proyecto
-     3. Pega aquí la URL y la anon key (Settings → API),
-        o configúralas desde la app en Configuración → Base de datos.
-   Si se dejan vacías, la app funciona en modo local (localStorage).
+   OmniCore ERP — Configuración de backend (Supabase)
+   Credenciales fijas del proyecto: la app se conecta directamente,
+   sin pantalla de configuración. La anon/publishable key es pública por
+   diseño; la seguridad la aplican las políticas RLS en la base de datos.
    ========================================================================== */
 
 window.OMNICORE_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "https://plrpqvxnyhlcilcogmth.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_L2SsFJj6TOcfRd_4UJHYAg_MOGCCUu0"
 };

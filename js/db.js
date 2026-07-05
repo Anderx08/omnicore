@@ -55,12 +55,12 @@ const Store = {
   },
 
   backendConfig() {
+    // Credenciales fijas en config.js → la app siempre usa Supabase, sin preguntar
+    if (window.OMNICORE_CONFIG.SUPABASE_URL && window.OMNICORE_CONFIG.SUPABASE_ANON_KEY) {
+      return { mode: "supabase", url: window.OMNICORE_CONFIG.SUPABASE_URL, key: window.OMNICORE_CONFIG.SUPABASE_ANON_KEY };
+    }
     const saved = JSON.parse(localStorage.getItem(this.LS_BACKEND) || "null");
-    return {
-      mode: saved?.mode || null,
-      url: saved?.url || window.OMNICORE_CONFIG.SUPABASE_URL,
-      key: saved?.key || window.OMNICORE_CONFIG.SUPABASE_ANON_KEY
-    };
+    return { mode: saved?.mode || null, url: saved?.url, key: saved?.key };
   },
 
   saveBackendConfig(cfg) { localStorage.setItem(this.LS_BACKEND, JSON.stringify(cfg)); },
