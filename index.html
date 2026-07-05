@@ -4,6 +4,13 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>OmniCore ERP — Enterprise Suite</title>
+<meta name="description" content="Plataforma ERP para PYMEs: ventas, inventario, RRHH, nómina, CRM, facturación y reportes en tiempo real."/>
+<meta name="theme-color" content="#0b1326"/>
+<link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+<meta property="og:title" content="OmniCore ERP — Enterprise Suite"/>
+<meta property="og:description" content="Toda tu operación, una sola plataforma. ERP en la nube con roles, tiempo real y analítica."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://anderx08.github.io/omnicore/"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -68,7 +75,7 @@
     }
   }
 </script>
-<link rel="stylesheet" href="css/styles.css?v=3"/>
+<link rel="stylesheet" href="css/styles.css?v=4"/>
 </head>
 <body class="bg-background text-on-background antialiased">
 
@@ -128,7 +135,7 @@
           <label class="flex items-center gap-xs cursor-pointer text-on-surface-variant">
             <input type="checkbox" checked class="rounded border-outline-variant bg-surface-container text-indigo-acc focus:ring-indigo-acc/40"/> Recordarme
           </label>
-          <a href="#" class="text-indigo-acc hover:underline font-medium">¿Olvidaste tu contraseña?</a>
+          <a href="#" id="forgot-pass" class="text-indigo-acc hover:underline font-medium">¿Olvidaste tu contraseña?</a>
         </div>
         <button type="submit" class="btn-primary w-full justify-center py-3" id="login-submit">
           <span class="material-symbols-outlined text-[20px]">login</span> Iniciar sesión
@@ -191,6 +198,9 @@
   <!-- Topbar -->
   <header id="topbar" class="fixed top-0 right-0 h-16 bg-surface-dim/80 backdrop-blur-md flex justify-between items-center px-lg border-b border-outline-variant/30 z-40 transition-all duration-300">
     <div class="flex items-center gap-lg min-w-0">
+      <button id="btn-mobile-menu" class="icon-btn lg:hidden -ml-2">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
       <div class="relative w-72 hidden md:block">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
         <input id="global-search" class="input-field pl-10 py-1.5" placeholder="Búsqueda global...  (Ctrl+K)" type="text"/>
@@ -232,14 +242,21 @@
 </div>
 
 <!-- Overlays -->
+<div id="mobile-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden lg:!hidden"></div>
 <div id="modal-root"></div>
-<div id="toast-root" class="fixed bottom-lg right-lg z-[125] space-y-sm w-[360px]"></div>
+<div id="toast-root" class="fixed bottom-lg right-lg z-[125] space-y-sm w-[360px] max-w-[calc(100vw-32px)]"></div>
 
-<script src="js/config.js?v=3"></script>
-<script src="js/data.js?v=3"></script>
-<script src="js/db.js?v=3"></script>
-<script src="js/components.js?v=3"></script>
-<script src="js/views.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
+<!-- Librerías (charts + exportaciones) -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.1/dist/apexcharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+
+<script src="js/config.js?v=4"></script>
+<script src="js/data.js?v=4"></script>
+<script src="js/db.js?v=4"></script>
+<script src="js/components.js?v=4"></script>
+<script src="js/views.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>

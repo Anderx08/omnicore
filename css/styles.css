@@ -237,9 +237,30 @@ body.sidebar-collapsed .nav-item { justify-content: center; padding: 8px; }
 body.sidebar-collapsed #main, body.sidebar-collapsed #topbar { margin-left: 76px; }
 body.sidebar-collapsed #topbar { width: calc(100% - 76px); }
 @media (max-width: 1024px) {
-  #sidebar { transform: translateX(-100%); }
+  #sidebar { transform: translateX(-100%); transition: transform .3s ease; }
   #main, #topbar { margin-left: 0 !important; width: 100% !important; }
+  body.mobile-nav-open #sidebar { transform: none; box-shadow: 0 0 60px rgba(0,0,0,.5); }
+  body.mobile-nav-open #mobile-backdrop { display: block; }
+  #view { padding: 16px; }
 }
+#mobile-backdrop { display: none; }
+
+/* ---------- Tour de bienvenida ---------- */
+#tour-overlay { position: fixed; inset: 0; z-index: 140; }
+.tour-spot {
+  position: fixed; border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(3, 7, 18, .72), 0 0 0 3px rgb(var(--indigo-acc));
+  transition: all .35s cubic-bezier(.22,1,.36,1);
+}
+.tour-tip {
+  position: fixed; width: 320px; z-index: 141;
+  background: rgb(var(--surface-container-high));
+  animation: fadeUp .3s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* charts */
+.apexcharts-tooltip { border-radius: 10px !important; }
+.apexcharts-legend-text { color: rgb(var(--on-surface-variant)) !important; }
 
 body.widgets-open #widgets-panel { transform: translateX(0); }
 

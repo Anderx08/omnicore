@@ -4,6 +4,9 @@
 
 const DB = {
 
+  projects: [],
+  tasks: [],
+
   settings: {
     company: { name: "OmniCore Systems S.A.", taxId: "3-101-887342", currency: "USD", address: "San José, Costa Rica", fiscalYear: "Enero" },
     prefs: { emailNotifs: true, stockAlerts: true, weeklyReport: true, mfa: false }

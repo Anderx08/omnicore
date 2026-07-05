@@ -11,15 +11,18 @@ const App = {
     { section: "Capital Humano" },
     { route: "empleados",     icon: "badge",          label: "Empleados" },
     { route: "rrhh",          icon: "diversity_3",    label: "Recursos Humanos" },
+    { route: "calendario",    icon: "calendar_month", label: "Calendario" },
     { route: "nomina",        icon: "account_balance_wallet", label: "Nómina" },
     { section: "Operaciones" },
     { route: "inventario",    icon: "inventory_2",    label: "Inventario" },
     { route: "compras",       icon: "shopping_cart",  label: "Compras" },
     { section: "Comercial" },
     { route: "ventas",        icon: "payments",       label: "Ventas" },
+    { route: "pos",           icon: "point_of_sale",  label: "Punto de Venta" },
     { route: "facturacion",   icon: "receipt_long",   label: "Facturación" },
     { route: "crm",           icon: "contact_page",   label: "CRM" },
-    { section: "Análisis" },
+    { section: "Gestión" },
+    { route: "proyectos",     icon: "view_kanban",    label: "Proyectos" },
     { route: "reportes",      icon: "monitoring",     label: "Reportes Financieros" },
     { section: "Sistema" },
     { route: "notificaciones",icon: "notifications",  label: "Notificaciones", badge: () => DB.notifications.filter(n => n.unread).length || null },
@@ -32,11 +35,75 @@ const App = {
   /* ========== Arranque ========== */
   async boot() {
     this.bindAuthScreens();
+    // Flujo de recuperación de contraseña (llega desde el enlace del correo)
+    Store.onRecovery = () => this.recoveryModal();
     let state;
     try { state = await Store.init(); }
     catch (e) { console.error(e); state = "auth"; }
     document.getElementById("boot-screen").remove();
     this.show(state);
+  },
+
+  recoveryModal() {
+    UI.modal({
+      title: "Establecer nueva contraseña",
+      subtitle: "Llegaste desde el enlace de recuperación. Define tu nueva contraseña.",
+      wide: false,
+      body: `<form id="recovery-form" class="space-y-md">
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase">Nueva contraseña</span>
+          <input name="p1" type="password" required minlength="6" class="input-field mt-xs"/></label>
+        <label class="block"><span class="text-label-md text-on-surface-variant uppercase">Confirmar contraseña</span>
+          <input name="p2" type="password" required minlength="6" class="input-field mt-xs"/></label>
+      </form>`,
+      footer: `<button class="btn-primary" data-set-pass>${UI.icon("key", "text-[18px]")} Guardar y entrar</button>`,
+      onMount: (root, close) => {
+        root.querySelector("[data-set-pass]").onclick = async () => {
+          const form = root.querySelector("#recovery-form");
+          if (!form.reportValidity()) return;
+          const d = Object.fromEntries(new FormData(form));
+          if (d.p1 !== d.p2) return UI.toast("Las contraseñas no coinciden.", "error");
+          try {
+            const { error } = await Store.sb.auth.updateUser({ password: d.p1 });
+            if (error) throw new Error(Store.humanError(error.message));
+            close();
+            UI.toast("Contraseña actualizada. ¡Bienvenido de nuevo!", "success");
+            history.replaceState(null, "", location.pathname);
+            location.reload();
+          } catch (ex) { UI.toast(ex.message, "error"); }
+        };
+      }
+    });
+  },
+
+  /* Realtime: llega un cambio de otro usuario */
+  onRealtime(table, eventType) {
+    if (table === "notifications") this.updateNotifBadge();
+    const routesByTable = {
+      employees: ["empleados", "nomina", "rrhh"], products: ["inventario", "pos", "dashboard"],
+      orders: ["ventas", "dashboard"], invoices: ["facturacion", "dashboard"], deals: ["crm"],
+      purchases: ["compras"], hr_requests: ["rrhh", "calendario"], notifications: ["notificaciones"],
+      audit_log: ["auditoria"], projects: ["proyectos"], tasks: ["proyectos"]
+    };
+    const affected = routesByTable[table] || [];
+    if (!affected.includes(this.current)) return;
+    if (document.getElementById("modal-root").children.length) return;       // no interrumpir modales
+    if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+    clearTimeout(this._rtTimer);
+    this._rtTimer = setTimeout(() => {
+      const view = Views[this.current];
+      if (view) view.render(document.getElementById("view"), []);
+      if (!this._rtToastAt || Date.now() - this._rtToastAt > 5000) {
+        this._rtToastAt = Date.now();
+        UI.toast("Otro usuario actualizó los datos. Vista sincronizada.", "info", "🔄 Tiempo real");
+      }
+    }, 400);
+  },
+
+  refreshAvatar() {
+    const btn = document.getElementById("btn-profile");
+    btn.innerHTML = Store.user.avatar_url
+      ? `<img src="${Store.user.avatar_url}" class="w-full h-full rounded-full object-cover" alt="avatar"/>`
+      : fmt.initials(Store.user.name);
   },
 
   show(state) {
@@ -79,6 +146,23 @@ const App = {
     });
 
     /* --- Registro --- */
+    /* --- Recuperar contraseña --- */
+    document.getElementById("forgot-pass").addEventListener("click", (e) => {
+      e.preventDefault();
+      UI.formModal({
+        title: "Recuperar contraseña", wide: false, submitLabel: "Enviar enlace",
+        subtitle: "Te enviaremos un correo con un enlace para restablecerla.",
+        fields: [{ name: "email", label: "Correo de tu cuenta", type: "email", value: document.getElementById("login-email").value }],
+        onSave: async (data, close) => {
+          try {
+            await Store.requestPasswordReset(data.email.trim());
+            close();
+            UI.toast("Revisa tu bandeja de entrada (y spam). El enlace te traerá de vuelta aquí.", "success", "✉ Correo enviado");
+          } catch (ex) { UI.toast(ex.message, "error"); }
+        }
+      });
+    });
+
     document.getElementById("register-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       document.getElementById("register-error").classList.add("hidden");
@@ -123,7 +207,7 @@ const App = {
   /* ========== App ========== */
   enter() {
     document.getElementById("app").classList.remove("hidden");
-    document.getElementById("btn-profile").textContent = fmt.initials(Store.user.name);
+    this.refreshAvatar();
     document.getElementById("company-name").textContent = DB.settings.company.name || "Global Operations";
     const dbs = document.getElementById("db-status");
     dbs.innerHTML = Store.mode === "supabase"
@@ -135,8 +219,47 @@ const App = {
     this.bindShell();
     this.updateNotifBadge();
     window.addEventListener("hashchange", () => this.route());
-    if (!location.hash || location.hash === "#") location.hash = "#/dashboard";
+    if (!location.hash || location.hash === "#" || location.hash.includes("access_token")) location.hash = "#/dashboard";
     else this.route();
+    // Tour de bienvenida (solo la primera vez, en escritorio)
+    if (!localStorage.getItem("omnicore_tour_done") && window.innerWidth > 900) {
+      setTimeout(() => this.startTour(), 1200);
+    }
+  },
+
+  /* ---------- Tour de bienvenida ---------- */
+  startTour() {
+    const steps = [
+      { sel: "#sidebar-nav", title: "Tus módulos", text: "Navega entre Dashboard, Ventas, Inventario, CRM, Proyectos y más. Lo que ves depende de tu rol." },
+      { sel: "#global-search", title: "Búsqueda global", text: "Encuentra empleados, productos, facturas o clientes al instante. Atajo: Ctrl+K." },
+      { sel: "#btn-new-tx", title: "Crear en un clic", text: "Facturas, pedidos, empleados u oportunidades desde cualquier pantalla." },
+      { sel: "#btn-profile", title: "Tu cuenta", text: "Edita tu perfil, sube tu foto y gestiona la configuración desde aquí." }
+    ];
+    let i = 0;
+    const overlay = document.createElement("div");
+    overlay.id = "tour-overlay";
+    document.body.appendChild(overlay);
+    const showStep = () => {
+      const s = steps[i];
+      const target = document.querySelector(s.sel);
+      if (!target) return end();
+      const r = target.getBoundingClientRect();
+      overlay.innerHTML = `
+        <div class="tour-spot" style="top:${r.top - 8}px;left:${r.left - 8}px;width:${r.width + 16}px;height:${r.height + 16}px"></div>
+        <div class="tour-tip card p-md" style="top:${Math.min(r.bottom + 14, innerHeight - 180)}px;left:${Math.min(Math.max(r.left, 16), innerWidth - 336)}px">
+          <p class="text-label-md text-indigo-acc font-bold uppercase">Paso ${i + 1} de ${steps.length}</p>
+          <p class="font-semibold text-body-lg text-on-surface mt-xs">${s.title}</p>
+          <p class="text-body-md text-on-surface-variant mt-xs">${s.text}</p>
+          <div class="flex justify-between items-center mt-md">
+            <button class="text-label-md text-on-surface-variant hover:text-on-surface" data-tour-skip>Saltar tour</button>
+            <button class="btn-primary" data-tour-next>${i === steps.length - 1 ? "¡Empezar!" : "Siguiente"}</button>
+          </div>
+        </div>`;
+      overlay.querySelector("[data-tour-next]").onclick = () => { i++; i < steps.length ? showStep() : end(); };
+      overlay.querySelector("[data-tour-skip]").onclick = end;
+    };
+    const end = () => { overlay.remove(); localStorage.setItem("omnicore_tour_done", "1"); };
+    showStep();
   },
 
   /* ---------- Router con permisos ---------- */
@@ -164,6 +287,8 @@ const App = {
     document.title = view.title + " — OmniCore ERP";
 
     const el = document.getElementById("view");
+    UI.destroyCharts();
+    document.body.classList.remove("mobile-nav-open");
     el.classList.remove("page-enter");
     el.innerHTML = UI.skeletonPage();
     setTimeout(() => {
@@ -220,8 +345,14 @@ const App = {
       document.documentElement.classList.toggle("dark");
       localStorage.setItem("omnicore_theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
       applyThemeLabel();
+      this.route(); // re-renderiza los gráficos con los colores del nuevo tema
     };
     applyThemeLabel();
+
+    // Menú móvil (hamburguesa)
+    const mobileBtn = document.getElementById("btn-mobile-menu");
+    if (mobileBtn) mobileBtn.onclick = (e) => { e.stopPropagation(); document.body.classList.toggle("mobile-nav-open"); };
+    document.getElementById("mobile-backdrop")?.addEventListener("click", () => document.body.classList.remove("mobile-nav-open"));
 
     // Colapso sidebar
     document.getElementById("sidebar-collapse").onclick = () => {

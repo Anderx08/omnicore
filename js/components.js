@@ -69,78 +69,165 @@ const UI = {
     });
   },
 
-  /* ---------- Charts SVG ---------- */
-  barChart(labels, seriesA, seriesB, legendA = "Ventas", legendB = "Compras") {
-    const cols = labels.map((l, i) => `
-      <div class="flex-1 flex flex-col items-center gap-xs h-full min-w-0">
-        <div class="flex-1 flex items-end gap-1.5 w-full justify-center chart-tip" data-tip="${l}: ${seriesA[i]} / ${seriesB[i]}">
-          <div class="chart-bar w-1/3 max-w-[26px] bg-primary" style="--target-height:${seriesA[i]}%; height:0;"></div>
-          <div class="chart-bar w-1/3 max-w-[26px] bg-secondary-container" style="--target-height:${seriesB[i]}%; height:0; animation-delay:.1s"></div>
-        </div>
-        <span class="text-label-md text-on-surface-variant">${l}</span>
-      </div>`).join("");
-    return `
-    <div>
-      <div class="flex gap-md items-center justify-end mb-md">
-        <span class="flex items-center gap-xs text-label-md text-on-surface"><span class="w-3 h-3 rounded-full bg-primary"></span>${legendA}</span>
-        <span class="flex items-center gap-xs text-label-md text-on-surface"><span class="w-3 h-3 rounded-full bg-secondary-container"></span>${legendB}</span>
-      </div>
-      <div class="h-[280px] flex items-end gap-sm relative">
-        <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
-          ${`<div class="w-full border-t border-outline-variant"></div>`.repeat(5)}
-        </div>
-        ${cols}
-      </div>
-    </div>`;
+  /* ---------- Charts interactivos (ApexCharts) ---------- */
+  _cid: 0,
+  _charts: {},
+
+  /* Resuelve "var(--x)" o "rgb(var(--x))" al color computado real */
+  resolveColor(str) {
+    if (!str || !str.includes("var(--")) return str;
+    const alias = { "c-indigo": "indigo-acc", "c-cyan": "cyan-acc", "c-purple": "purple-acc", "c-success": "success" };
+    let name = str.match(/var\(--([a-z-]+)\)/)[1];
+    if (alias[name]) name = alias[name];
+    const triplet = getComputedStyle(document.documentElement).getPropertyValue("--" + name).trim();
+    return triplet.includes(" ") ? `rgb(${triplet.replace(/ /g, ",")})` : (triplet || str);
   },
 
-  lineChart(data, { height = 220, stroke = "rgb(var(--indigo-acc))", fill = true, id = "lc" } = {}) {
-    const w = 600, h = height, pad = 10;
-    const max = Math.max(...data) * 1.15;
-    const pts = data.map((v, i) => [pad + i * (w - 2 * pad) / (data.length - 1), h - pad - (v / max) * (h - 2 * pad)]);
-    const path = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-    const area = path + ` L${pts[pts.length - 1][0]},${h - pad} L${pts[0][0]},${h - pad} Z`;
-    return `
-    <svg viewBox="0 0 ${w} ${h}" class="w-full" preserveAspectRatio="none" style="height:${height}px">
-      <defs>
-        <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${stroke}" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      ${[0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${w}" y1="${h * f}" y2="${h * f}" stroke="rgb(var(--outline-variant))" stroke-opacity=".2"/>`).join("")}
-      ${fill ? `<path d="${area}" fill="url(#grad-${id})"/>` : ""}
-      <path d="${path}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round" class="chart-line"/>
-      ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${stroke}" opacity="0"><animate attributeName="opacity" to="1" dur="0.3s" begin="1.2s" fill="freeze"/></circle>`).join("")}
-    </svg>`;
+  _theme() {
+    const c = (n) => this.resolveColor(`var(--${n})`);
+    return {
+      fore: c("on-surface-variant"), grid: c("outline-variant"),
+      indigo: c("indigo-acc"), cyan: c("cyan-acc"), purple: c("purple-acc"),
+      success: c("success"), primary: c("primary"), secondary: c("secondary")
+    };
+  },
+
+  _mount(id, options) {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (!el || typeof ApexCharts === "undefined") return;
+      try { UI._charts[id]?.destroy(); } catch (e) {}
+      const ch = new ApexCharts(el, options);
+      ch.render();
+      UI._charts[id] = ch;
+    }, 60);
+  },
+
+  destroyCharts() {
+    Object.values(UI._charts).forEach(c => { try { c.destroy(); } catch (e) {} });
+    UI._charts = {};
+  },
+
+  _baseOptions(t, height) {
+    return {
+      chart: { height, background: "transparent", toolbar: { show: false }, fontFamily: "Inter, sans-serif",
+               animations: { easing: "easeout", speed: 700 }, foreColor: t.fore },
+      grid: { borderColor: t.grid, strokeDashArray: 3, opacity: 0.2 },
+      tooltip: { theme: document.documentElement.classList.contains("dark") ? "dark" : "light" },
+      dataLabels: { enabled: false }
+    };
+  },
+
+  barChart(labels, seriesA, seriesB, legendA = "Ventas", legendB = "Compras") {
+    const id = "chart-" + (++UI._cid);
+    const t = UI._theme();
+    UI._mount(id, {
+      ...UI._baseOptions(t, 300),
+      chart: { ...UI._baseOptions(t, 300).chart, type: "bar" },
+      series: [{ name: legendA, data: seriesA }, { name: legendB, data: seriesB }],
+      colors: [t.indigo, t.cyan],
+      plotOptions: { bar: { columnWidth: "55%", borderRadius: 5, borderRadiusApplication: "end" } },
+      xaxis: { categories: labels, axisBorder: { show: false }, axisTicks: { show: false } },
+      legend: { position: "top", horizontalAlign: "right", markers: { radius: 12 } },
+      fill: { opacity: [1, 0.55] }
+    });
+    return `<div id="${id}" class="min-h-[300px]"></div>`;
+  },
+
+  lineChart(data, { height = 220, stroke = "rgb(var(--indigo-acc))", id = "lc", labels = null } = {}) {
+    const cid = "chart-" + (++UI._cid);
+    const t = UI._theme();
+    const color = UI.resolveColor(stroke);
+    UI._mount(cid, {
+      ...UI._baseOptions(t, height),
+      chart: { ...UI._baseOptions(t, height).chart, type: "area", sparkline: { enabled: false } },
+      series: [{ name: "Valor", data }],
+      colors: [color],
+      stroke: { curve: "smooth", width: 3 },
+      fill: { type: "gradient", gradient: { shadeIntensity: 0.6, opacityFrom: 0.35, opacityTo: 0.02 } },
+      xaxis: { categories: labels || data.map((_, i) => i + 1), labels: { show: !!labels }, axisBorder: { show: false }, axisTicks: { show: false } },
+      yaxis: { labels: { formatter: (v) => Math.round(v).toLocaleString() } }
+    });
+    return `<div id="${cid}" style="min-height:${height}px"></div>`;
   },
 
   donutChart(segments, centerLabel = "", size = 190) {
-    const total = segments.reduce((a, s) => a + s.value, 0);
-    const r = 15.915; let offset = 25;
-    const circles = segments.map((s, i) => {
-      const pct = s.value / total * 100;
-      const el = `<circle r="${r}" cx="21" cy="21" fill="transparent" stroke="${s.color}" stroke-width="4.5"
-        stroke-dasharray="${pct} ${100 - pct}" stroke-dashoffset="${offset}" class="donut-seg" style="animation-delay:${i * .12}s"></circle>`;
-      offset -= pct;
-      return el;
-    }).join("");
-    const legend = segments.map(s => `
-      <div class="flex items-center justify-between gap-md text-body-md">
-        <span class="flex items-center gap-sm text-on-surface-variant"><span class="w-2.5 h-2.5 rounded-full" style="background:${s.color}"></span>${s.label}</span>
-        <span class="font-semibold text-on-surface">${s.value}%</span>
-      </div>`).join("");
-    return `
-    <div class="flex items-center gap-lg flex-wrap justify-center">
-      <div class="relative" style="width:${size}px;height:${size}px">
-        <svg viewBox="0 0 42 42" class="w-full h-full -rotate-90">${circles}</svg>
-        <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <span class="text-headline-md text-on-surface">${centerLabel}</span>
-          <span class="text-label-md text-on-surface-variant">del total</span>
-        </div>
-      </div>
-      <div class="flex-1 min-w-[160px] space-y-sm">${legend}</div>
-    </div>`;
+    const id = "chart-" + (++UI._cid);
+    const t = UI._theme();
+    UI._mount(id, {
+      ...UI._baseOptions(t, size + 40),
+      chart: { ...UI._baseOptions(t, size + 40).chart, type: "donut" },
+      series: segments.map(s => s.value),
+      labels: segments.map(s => s.label),
+      colors: segments.map(s => UI.resolveColor(s.color)),
+      legend: { position: "right", fontSize: "13px" },
+      stroke: { show: false },
+      plotOptions: { pie: { donut: { size: "74%", labels: { show: true, total: {
+        show: true, label: "del total", fontSize: "12px", color: t.fore,
+        formatter: () => centerLabel || segments.reduce((a, s) => a + s.value, 0) + "%"
+      } } } } },
+      responsive: [{ breakpoint: 640, options: { legend: { position: "bottom" } } }]
+    });
+    return `<div id="${id}"></div>`;
+  },
+
+  /* ---------- Exportaciones reales ---------- */
+  exportExcel(rows, filename = "export.xlsx", sheet = "Datos") {
+    if (typeof XLSX === "undefined") return UI.toast("Librería de Excel no disponible.", "error");
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheet);
+    XLSX.writeFile(wb, filename);
+    UI.toast(filename + " descargado.", "success", "Exportación Excel");
+  },
+
+  exportPDF({ title, subtitle = "", head, body, filename = "reporte.pdf" }) {
+    if (typeof jspdf === "undefined") return UI.toast("Librería PDF no disponible.", "error");
+    const doc = new jspdf.jsPDF();
+    doc.setFontSize(16); doc.setFont(undefined, "bold");
+    doc.text(title, 14, 18);
+    doc.setFontSize(10); doc.setFont(undefined, "normal"); doc.setTextColor(120);
+    doc.text(subtitle, 14, 25);
+    doc.autoTable({
+      head: [head], body, startY: 32, theme: "grid",
+      headStyles: { fillColor: [79, 70, 229], fontSize: 9 },
+      styles: { fontSize: 8.5, cellPadding: 2.5 }
+    });
+    doc.save(filename);
+    UI.toast(filename + " descargado.", "success", "Exportación PDF");
+  },
+
+  invoicePDF(inv) {
+    if (typeof jspdf === "undefined") return UI.toast("Librería PDF no disponible.", "error");
+    const net = inv.total / 1.13, tax = inv.total - net;
+    const doc = new jspdf.jsPDF();
+    doc.setFillColor(79, 70, 229); doc.rect(0, 0, 210, 30, "F");
+    doc.setTextColor(255); doc.setFontSize(18); doc.setFont(undefined, "bold");
+    doc.text(DB.settings.company.name, 14, 14);
+    doc.setFontSize(9); doc.setFont(undefined, "normal");
+    doc.text(`CIF ${DB.settings.company.taxId} · ${DB.settings.company.address}`, 14, 21);
+    doc.setFontSize(16); doc.text(inv.id, 196, 14, { align: "right" });
+    doc.setFontSize(10); doc.text(inv.status, 196, 21, { align: "right" });
+    doc.setTextColor(60); doc.setFontSize(10);
+    doc.text(`Cliente: ${inv.customer}`, 14, 42);
+    doc.text(`Emisión: ${inv.date}   ·   Vencimiento: ${inv.due}   ·   Condiciones: Crédito 30 días`, 14, 49);
+    doc.autoTable({
+      head: [["Concepto", "Cant.", "Precio", "Importe"]],
+      body: [
+        ["Equipamiento de red empresarial", "4", fmt.money(net * 0.55 / 4), fmt.money(net * 0.55)],
+        ["Servicios de instalación y configuración", "1", fmt.money(net * 0.3), fmt.money(net * 0.3)],
+        ["Soporte premium (12 meses)", "1", fmt.money(net * 0.15), fmt.money(net * 0.15)]
+      ],
+      startY: 56, theme: "striped", headStyles: { fillColor: [30, 41, 59] }, styles: { fontSize: 9 }
+    });
+    const y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${fmt.money(net)}`, 196, y, { align: "right" });
+    doc.text(`IVA (13%): ${fmt.money(tax)}`, 196, y + 6, { align: "right" });
+    doc.setFont(undefined, "bold"); doc.setFontSize(12);
+    doc.text(`Total: ${fmt.money(inv.total)}`, 196, y + 14, { align: "right" });
+    doc.save(inv.id + ".pdf");
+    UI.toast(inv.id + ".pdf descargada.", "success", "Factura PDF");
   },
 
   sparkline(data, color = "rgb(var(--success))") {
@@ -227,6 +314,8 @@ const UI = {
             `<option value="${o}" ${f.value === o ? "selected" : ""}>${o}</option>`).join("")}</select></label>`;
         if (f.type === "textarea")
           return `<label class="block ${span}">${label}<textarea ${base} rows="3" placeholder="${f.placeholder || ""}">${f.value ?? ""}</textarea></label>`;
+        if (f.type === "file")
+          return `<label class="block ${span}">${label}<input type="file" name="${f.name}" ${f.accept ? `accept="${f.accept}"` : ""} class="input-field mt-xs !py-2 file:mr-3 file:rounded file:border-0 file:bg-indigo-acc/15 file:text-indigo-acc file:px-3 file:py-1 file:text-[12px] file:font-semibold"/></label>`;
         return `<label class="block ${span}">${label}<input type="${f.type || "text"}" ${base}
           value="${f.value ?? ""}" placeholder="${f.placeholder || ""}" ${f.min != null ? `min="${f.min}"` : ""} ${f.step ? `step="${f.step}"` : ""} ${f.readonly ? "readonly" : ""}/></label>`;
       }).join("")}

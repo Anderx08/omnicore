@@ -12,12 +12,12 @@ const ROLES = {
   },
   gerente: {
     label: "Gerente", badge: "info",
-    routes: ["dashboard", "empleados", "rrhh", "nomina", "inventario", "compras", "ventas", "facturacion", "crm", "reportes", "notificaciones", "perfil", "configuracion"],
+    routes: ["dashboard", "empleados", "rrhh", "calendario", "nomina", "inventario", "compras", "ventas", "pos", "facturacion", "crm", "proyectos", "reportes", "notificaciones", "perfil", "configuracion"],
     caps: { salaries: true, approve: true, payroll: true, create: true }
   },
   empleado: {
     label: "Empleado", badge: "cyan",
-    routes: ["dashboard", "inventario", "compras", "ventas", "facturacion", "crm", "notificaciones", "perfil", "configuracion"],
+    routes: ["dashboard", "inventario", "compras", "ventas", "pos", "facturacion", "crm", "proyectos", "notificaciones", "perfil", "configuracion"],
     caps: { create: true }
   }
 };
@@ -51,7 +51,9 @@ const Store = {
     crm_customers: { pk: "name", get: () => DB.crm.customers, set: v => DB.crm.customers = v },
     hr_requests:   { pk: "id",   get: () => DB.hr.requests,   set: v => DB.hr.requests = v },
     notifications: { pk: "id",   get: () => DB.notifications, set: v => DB.notifications = v },
-    audit_log:     { pk: "id",   get: () => DB.audit,         set: v => DB.audit = v }
+    audit_log:     { pk: "id",   get: () => DB.audit,         set: v => DB.audit = v },
+    projects:      { pk: "id",   get: () => DB.projects,      set: v => DB.projects = v },
+    tasks:         { pk: "id",   get: () => DB.tasks,         set: v => DB.tasks = v }
   },
 
   backendConfig() {
@@ -68,14 +70,19 @@ const Store = {
   /* ========== Inicialización ========== */
   async init() {
     const cfg = this.backendConfig();
-    if (cfg.mode === "local") { this.mode = "local"; return this.localInit(); }
+    if (cfg.mode === "local" || !cfg.url || !cfg.key) { this.mode = "local"; return this.localInit(); }
     try {
       this.mode = "supabase";
       this.sb = window.supabase.createClient(cfg.url, cfg.key);
+      // Flujo de recuperación de contraseña (enlace del correo)
+      this.sb.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY" && this.onRecovery) this.onRecovery();
+      });
       const { data: { session } } = await this.sb.auth.getSession();
       if (!session) return "auth";
       await this.loadProfile(session.user);
       await this.hydrate();
+      this.initRealtime();
       return "app";
     } catch (e) {
       console.error("Supabase init error:", e);
@@ -100,6 +107,7 @@ const Store = {
     if (!data.session) return { needsConfirm: true };
     await this.loadProfile(data.session.user);
     await this.hydrate();
+    this.initRealtime();
     this.log("REGISTER", "Seguridad", `Nuevo usuario registrado: ${email} (rol: ${this.user.role})`);
     return { ok: true };
   },
@@ -114,8 +122,70 @@ const Store = {
       throw new Error("Tu cuenta está desactivada. Contacta al administrador.");
     }
     await this.hydrate();
+    this.initRealtime();
     this.log("LOGIN", "Seguridad", `Inicio de sesión exitoso: ${email}`);
     return { ok: true };
+  },
+
+  async requestPasswordReset(email) {
+    if (this.mode === "local") throw new Error("En modo local no hay envío de correos. Contacta al administrador.");
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, {
+      redirectTo: location.origin + location.pathname
+    });
+    if (error) throw new Error(this.humanError(error.message));
+  },
+
+  /* ========== Realtime: sincronización en vivo entre usuarios ========== */
+  initRealtime() {
+    if (this.mode !== "supabase" || this._rt) return;
+    this._rt = this.sb.channel("omnicore-live")
+      .on("postgres_changes", { event: "*", schema: "public" }, (p) => {
+        if (p.table === "profiles") {
+          const i = this.users.findIndex(u => u.id === (p.new?.id || p.old?.id));
+          if (p.eventType === "DELETE") { if (i >= 0) this.users.splice(i, 1); }
+          else if (i >= 0) this.users[i] = { ...this.users[i], ...p.new };
+          if (p.new?.id === this.user?.id) Object.assign(this.user, p.new);
+          return;
+        }
+        if (p.table === "settings" && p.new) { DB.settings = { company: p.new.company, prefs: p.new.prefs }; return; }
+        const c = this.cols[p.table];
+        if (!c) return;
+        const pk = c.pk;
+        if (p.eventType === "DELETE") {
+          c.set(c.get().filter(r => r[pk] !== p.old[pk]));
+        } else {
+          const list = c.get();
+          const i = list.findIndex(r => r[pk] === p.new[pk]);
+          if (i >= 0) list[i] = { ...list[i], ...p.new };
+          else if (p.table === "audit_log") list.unshift(p.new);
+          else list.unshift(p.new);
+        }
+        if (window.App?.onRealtime) App.onRealtime(p.table, p.eventType);
+      })
+      .subscribe();
+  },
+
+  /* ========== Storage: avatares e imágenes de producto ========== */
+  async uploadAvatar(file) {
+    if (this.mode !== "supabase") throw new Error("Las fotos requieren la base de datos online.");
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const path = `${this.user.id}/avatar.${ext}`;
+    const { error } = await this.sb.storage.from("avatars").upload(path, file, { upsert: true });
+    if (error) throw new Error("No se pudo subir la imagen: " + error.message + ". ¿Ejecutaste supabase/upgrade.sql?");
+    const { data } = this.sb.storage.from("avatars").getPublicUrl(path);
+    const url = data.publicUrl + "?t=" + Date.now();
+    await this.updateProfile({ avatar_url: url });
+    return url;
+  },
+
+  async uploadProductImage(sku, file) {
+    if (this.mode !== "supabase") throw new Error("Las imágenes requieren la base de datos online.");
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const path = `${sku}.${ext}`;
+    const { error } = await this.sb.storage.from("product-images").upload(path, file, { upsert: true });
+    if (error) throw new Error("No se pudo subir la imagen: " + error.message + ". ¿Ejecutaste supabase/upgrade.sql?");
+    const { data } = this.sb.storage.from("product-images").getPublicUrl(path);
+    return data.publicUrl + "?t=" + Date.now();
   },
 
   async logout() {

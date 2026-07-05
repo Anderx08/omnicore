@@ -19,14 +19,29 @@ const Views = {
   dashboard: {
     title: "Dashboard", crumbs: ["Inicio", "Dashboard Ejecutivo"],
     render(el) {
-      const k = DB.kpis;
+      // KPIs calculados de los datos reales de la base
+      const income = DB.invoices.reduce((a, i) => a + i.total, 0);
+      const expenses = DB.purchases.filter(p => p.status !== "Cancelada").reduce((a, p) => a + p.total, 0)
+                     + DB.employees.reduce((a, e) => a + e.salary / 12, 0);
+      const trend = DB.salesTrend;
+      const growth = trend.length > 1 ? +((trend.at(-1) - trend.at(-2)) / trend.at(-2) * 100).toFixed(1) : 0;
+      const customers = new Set([...DB.crm.customers.map(c => c.name), ...DB.orders.map(o => o.customer)]).size;
+      const low = DB.products.filter(p => p.stock <= p.min).length;
+      const k = [
+        { label: "Ingresos (facturado)", value: Math.round(income), prefix: "$", trend: +12.5, icon: "payments", color: "primary" },
+        { label: "Gastos (compras+nómina)", value: Math.round(expenses), prefix: "$", trend: +4.2, icon: "credit_card", color: "secondary", invert: true },
+        { label: "Beneficio Neto", value: Math.round(income - expenses), prefix: "$", trend: +18.9, icon: "trending_up", color: "success" },
+        { label: "Crecimiento Ventas", value: growth, suffix: "%", trend: +5.1, icon: "monitoring", color: "cyan" },
+        { label: "Clientes Activos", value: customers, trend: +8.2, icon: "group", color: "indigo" },
+        { label: "Alertas de Stock", value: low, trend: -12.0, icon: "warning", color: "warning", invert: true }
+      ];
       el.innerHTML = `
-      ${pageHeader(`Hola, ${Store.user.name.split(" ")[0]} 👋`, "Resumen operacional de hoy, 4 de Julio de 2026", `
+      ${pageHeader(`Hola, ${Store.user.name.split(" ")[0]} 👋`, "Resumen operacional en tiempo real", `
         <button class="btn-ghost">${UI.icon("calendar_month", "text-[18px]")} Últimos 30 días</button>
         <button class="btn-ghost" data-export>${UI.icon("file_download", "text-[18px]")} Exportar</button>`)}
 
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
-        ${[k.revenue, k.expenses, k.profit, k.growth, k.customers, k.lowstock].map(UI.kpiCard).join("")}
+        ${k.map(UI.kpiCard).join("")}
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
@@ -94,7 +109,16 @@ const Views = {
         UI.toast(`Orden ${id} creada para reponer ${p.name}.`, "success", "Orden generada");
       });
       const exp = el.querySelector("[data-export]");
-      if (exp) exp.onclick = () => { Store.log("EXPORT", "Dashboard", "Exportación del panel ejecutivo a PDF"); UI.toast("Reporte del panel exportado a PDF.", "info", "Exportación completa"); };
+      if (exp) exp.onclick = () => {
+        UI.exportPDF({
+          title: "Panel Ejecutivo — " + DB.settings.company.name,
+          subtitle: "Resumen operacional generado el 4 de Julio de 2026",
+          head: ["KPI", "Valor"],
+          body: k.map(x => [x.label, (x.prefix || "") + x.value.toLocaleString("en-US") + (x.suffix || "")]),
+          filename: "panel-ejecutivo.pdf"
+        });
+        Store.log("EXPORT", "Dashboard", "Exportación del panel ejecutivo a PDF");
+      };
     }
   },
 
@@ -173,10 +197,11 @@ const Views = {
         Views.empleados.openModal(null, table);
       };
       el.querySelector("[data-csv]").onclick = () => {
-        const csv = "id,nombre,email,departamento,rol,estado\n" + DB.employees.map(e => `${e.id},"${e.name}",${e.email},${e.dept},"${e.role}",${e.status}`).join("\n");
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "empleados.csv"; a.click();
-        Store.log("EXPORT", "Empleados", "Exportación CSV del listado de empleados");
+        UI.exportExcel(DB.employees.map(e => ({
+          ID: e.id, Nombre: e.name, Correo: e.email, Departamento: e.dept, Puesto: e.role,
+          Estado: e.status, ...(canSalary ? { "Salario anual": e.salary } : {}), Ubicación: e.location, Contratado: e.hired
+        })), "empleados.xlsx", "Empleados");
+        Store.log("EXPORT", "Empleados", "Exportación Excel del listado de empleados");
       };
     },
 
@@ -469,7 +494,9 @@ const Views = {
             return `
             <div class="card card-hover p-md flex flex-col gap-sm">
               <div class="flex justify-between items-start">
-                <div class="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">${UI.icon(p.img || "inventory_2")}</div>
+                ${p.image_url
+                  ? `<img src="${p.image_url}" class="w-11 h-11 rounded-xl object-cover border border-outline-variant/20" alt="${p.name}"/>`
+                  : `<div class="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">${UI.icon(p.img || "inventory_2")}</div>`}
                 ${UI.badge(level[0], level[1])}
               </div>
               <div class="flex-1">
@@ -552,11 +579,17 @@ const Views = {
           { name: "min", label: "Stock mínimo", type: "number", min: 0, value: p?.min ?? 5 },
           { name: "max", label: "Stock máximo", type: "number", min: 1, value: p?.max ?? 100 },
           { name: "warehouse", label: "Almacén", type: "select", options: DB.warehouses.map(w => w.name), value: p?.warehouse },
-          { name: "supplier", label: "Proveedor", type: "select", options: DB.suppliers.map(s => s.name), value: p?.supplier }
+          { name: "supplier", label: "Proveedor", type: "select", options: DB.suppliers.map(s => s.name), value: p?.supplier },
+          ...(Store.mode === "supabase" ? [{ name: "imagefile", label: "Imagen del producto (opcional)", type: "file", accept: "image/*", required: false, cols: 2 }] : [])
         ],
         onSave: async (data, close) => {
           data.stock = parseInt(data.stock); data.min = parseInt(data.min); data.max = parseInt(data.max);
+          const imageFile = data.imagefile; delete data.imagefile;
           const row = { img: p?.img || "inventory_2", ...(p || {}), ...data };
+          if (imageFile && imageFile.size > 0) {
+            try { row.image_url = await Store.uploadProductImage(row.sku, imageFile); }
+            catch (ex) { UI.toast(ex.message, "warning"); }
+          }
           await Store.upsert("products", row);
           Store.log(p ? "UPDATE" : "CREATE", "Inventario", `${p ? "Ajuste de producto" : "Producto creado"}: ${row.sku} (stock: ${row.stock})`, p && row.stock <= row.min ? "warning" : "info");
           close(); Views.inventario.render(el);
@@ -897,7 +930,7 @@ const Views = {
           <button class="btn-primary" data-pdf2>${UI.icon("picture_as_pdf", "text-[18px]")} Descargar PDF</button>`,
         onMount: (root, close) => {
           root.querySelector("[data-close2]").onclick = close;
-          root.querySelector("[data-pdf2]").onclick = () => { Store.log("EXPORT", "Facturación", `Descarga PDF de ${inv.id}`); UI.toast(inv.id + ".pdf descargada.", "info"); };
+          root.querySelector("[data-pdf2]").onclick = () => { UI.invoicePDF(inv); Store.log("EXPORT", "Facturación", `Descarga PDF de ${inv.id}`); };
         }
       });
     }
@@ -1062,8 +1095,22 @@ const Views = {
 
       el.querySelectorAll("[data-export]").forEach(b => b.onclick = () => {
         const kind = b.dataset.export;
+        const pnlRows = f.pnl.months.map((m, i) => ({
+          Mes: m + " 2026", "Ingresos (miles)": f.pnl.income[i], "Gastos (miles)": f.pnl.expenses[i],
+          "Resultado (miles)": f.pnl.income[i] - f.pnl.expenses[i]
+        }));
+        if (kind === "excel") {
+          UI.exportExcel(pnlRows, "reporte-financiero.xlsx", "P&L");
+        } else {
+          UI.exportPDF({
+            title: "Reporte Financiero — " + DB.settings.company.name,
+            subtitle: "Pérdidas y Ganancias · Enero a Junio 2026 (miles USD)",
+            head: ["Mes", "Ingresos", "Gastos", "Resultado"],
+            body: pnlRows.map(r => [r.Mes, r["Ingresos (miles)"], r["Gastos (miles)"], r["Resultado (miles)"]]),
+            filename: "reporte-financiero.pdf"
+          });
+        }
         Store.log("EXPORT", "Reportes", `Reporte financiero Ene–Jun 2026 exportado a ${kind.toUpperCase()}`);
-        UI.toast(`Reporte financiero exportado a ${kind.toUpperCase()}.`, "success", "Exportación completa");
       });
       UI.animateCounters(el);
     }
@@ -1147,7 +1194,13 @@ const Views = {
           </tr>`
       }).render();
       UI.animateCounters(el);
-      el.querySelector("[data-log-export]").onclick = () => UI.toast("Log de auditoría exportado (JSON).", "info");
+      el.querySelector("[data-log-export]").onclick = () => {
+        UI.exportExcel(DB.audit.map(a => ({
+          Timestamp: a.ts, Usuario: a.username, IP: a.ip, "Módulo": a.module,
+          "Acción": a.action, Detalle: a.detail, Severidad: a.severity
+        })), "auditoria.xlsx", "Auditoría");
+        Store.log("EXPORT", "Auditoría", "Exportación Excel del log de auditoría");
+      };
     }
   },
 
@@ -1281,7 +1334,15 @@ const Views = {
       el.innerHTML = `
       ${pageHeader("Mi Perfil", "Tu información personal y actividad en el sistema")}
       <div class="card p-lg flex flex-wrap gap-lg items-center">
-        <span class="avatar !w-20 !h-20 !text-[24px] brand-gradient !text-white">${fmt.initials(u.name)}</span>
+        <div class="relative group">
+          ${u.avatar_url
+            ? `<img src="${u.avatar_url}" class="w-20 h-20 rounded-full object-cover border-2 border-outline-variant/30" alt="avatar"/>`
+            : `<span class="avatar !w-20 !h-20 !text-[24px] brand-gradient !text-white">${fmt.initials(u.name)}</span>`}
+          <label class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full brand-gradient text-white flex items-center justify-center cursor-pointer shadow-glow hover:scale-110 transition-transform" title="Cambiar foto">
+            ${UI.icon("photo_camera", "text-[16px]")}
+            <input type="file" id="avatar-input" accept="image/*" class="hidden"/>
+          </label>
+        </div>
         <div class="flex-1 min-w-[220px]">
           <h2 class="text-headline-md text-on-surface">${u.name}</h2>
           <p class="text-body-md text-on-surface-variant">${u.email}</p>
@@ -1356,6 +1417,19 @@ const Views = {
         try { await Store.changePassword(data.p1); e.target.reset(); UI.toast("Contraseña actualizada.", "success"); }
         catch (ex) { UI.toast(ex.message, "error"); }
       });
+      const avatarInput = el.querySelector("#avatar-input");
+      if (avatarInput) avatarInput.onchange = async () => {
+        const file = avatarInput.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) return UI.toast("La imagen debe pesar menos de 2 MB.", "warning");
+        try {
+          UI.toast("Subiendo foto…", "info");
+          await Store.uploadAvatar(file);
+          App.refreshAvatar();
+          Views.perfil.render(el);
+          UI.toast("Foto de perfil actualizada.", "success");
+        } catch (ex) { UI.toast(ex.message, "error"); }
+      };
     }
   },
 
@@ -1452,6 +1526,321 @@ const Views = {
         UI.toast("Preferencia guardada.", "info");
       });
 
+    }
+  },
+
+  /* ================= PUNTO DE VENTA (POS) ================= */
+  pos: {
+    title: "Punto de Venta", crumbs: ["Inicio", "Comercial", "Punto de Venta"],
+    cart: [],
+    render(el) {
+      Views.pos.cart = [];
+      el.innerHTML = `
+      ${pageHeader("Punto de Venta", "Cobra en segundos: crea pedido + factura y descuenta stock automáticamente")}
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg items-start">
+        <div class="lg:col-span-2">
+          <div class="relative mb-md">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+            <input id="pos-search" class="input-field pl-10" placeholder="Buscar producto por nombre o SKU…"/>
+          </div>
+          <div id="pos-grid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-md"></div>
+        </div>
+        <div class="card p-lg lg:sticky lg:top-20 space-y-md">
+          <h4 class="text-headline-sm text-on-surface flex items-center gap-sm">${UI.icon("shopping_bag")} Carrito</h4>
+          <label class="block"><span class="text-label-md text-on-surface-variant uppercase">Cliente</span>
+            <input id="pos-customer" class="input-field mt-xs" placeholder="Cliente de mostrador"/></label>
+          <div id="pos-cart" class="space-y-sm max-h-72 overflow-y-auto"></div>
+          <div id="pos-totals" class="pt-md border-t border-outline-variant/20 space-y-xs text-body-md"></div>
+          <button id="pos-charge" class="btn-primary w-full justify-center py-3">${UI.icon("point_of_sale", "text-[20px]")} Cobrar</button>
+        </div>
+      </div>`;
+
+      const renderGrid = (q = "") => {
+        const grid = document.getElementById("pos-grid");
+        if (!grid) return;
+        const items = DB.products.filter(p => (p.name + p.sku).toLowerCase().includes(q.toLowerCase()));
+        grid.innerHTML = items.map(p => `
+          <button class="card card-hover p-md text-left flex flex-col gap-xs ${p.stock <= 0 ? "opacity-40 pointer-events-none" : ""}" data-add="${p.sku}">
+            ${p.image_url
+              ? `<img src="${p.image_url}" class="w-10 h-10 rounded-lg object-cover"/>`
+              : `<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-on-surface-variant">${UI.icon(p.img || "inventory_2", "text-[20px]")}</div>`}
+            <p class="font-semibold text-body-md text-on-surface leading-tight">${p.name}</p>
+            <div class="flex justify-between items-center w-full mt-auto">
+              <span class="text-label-md text-on-surface-variant">${p.stock} uds</span>
+              <span class="font-bold text-on-surface">${fmt.money(p.price)}</span>
+            </div>
+          </button>`).join("") || `<p class="col-span-full text-center text-on-surface-variant py-lg">Sin productos</p>`;
+        grid.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addToCart(b.dataset.add));
+      };
+
+      const renderCart = () => {
+        const cartEl = document.getElementById("pos-cart");
+        const totalsEl = document.getElementById("pos-totals");
+        if (!cartEl) return;
+        const cart = Views.pos.cart;
+        cartEl.innerHTML = cart.length ? cart.map((it, i) => `
+          <div class="flex items-center gap-sm p-sm rounded-lg bg-surface-container/60">
+            <div class="flex-1 min-w-0"><p class="text-body-md font-medium text-on-surface truncate">${it.name}</p>
+            <p class="text-label-md text-on-surface-variant">${fmt.money(it.price)} c/u</p></div>
+            <div class="flex items-center gap-xs">
+              <button class="icon-btn !p-1" data-qty="${i}:-1">${UI.icon("remove", "text-[16px]")}</button>
+              <span class="w-6 text-center font-semibold text-body-md">${it.qty}</span>
+              <button class="icon-btn !p-1" data-qty="${i}:1">${UI.icon("add", "text-[16px]")}</button>
+            </div>
+            <span class="font-semibold text-body-md w-20 text-right">${fmt.money(it.price * it.qty)}</span>
+          </div>`).join("")
+          : `<p class="text-body-md text-on-surface-variant text-center py-md">${UI.icon("production_quantity_limits", "text-[32px] opacity-40 block mx-auto mb-xs")}Añade productos del catálogo</p>`;
+        const total = cart.reduce((a, it) => a + it.price * it.qty, 0);
+        const net = total / 1.13;
+        totalsEl.innerHTML = `
+          <div class="flex justify-between text-on-surface-variant"><span>Subtotal</span><span>${fmt.money(net)}</span></div>
+          <div class="flex justify-between text-on-surface-variant"><span>IVA (13%)</span><span>${fmt.money(total - net)}</span></div>
+          <div class="flex justify-between font-bold text-on-surface text-body-lg"><span>Total</span><span>${fmt.money(total)}</span></div>`;
+        cartEl.querySelectorAll("[data-qty]").forEach(b => b.onclick = () => {
+          const [i, d] = b.dataset.qty.split(":").map(Number);
+          const it = cart[i], prod = DB.products.find(p => p.sku === it.sku);
+          it.qty += d;
+          if (it.qty <= 0) cart.splice(i, 1);
+          else if (it.qty > prod.stock) { it.qty = prod.stock; UI.toast("No hay más stock disponible.", "warning"); }
+          renderCart();
+        });
+      };
+
+      const addToCart = (sku) => {
+        const p = DB.products.find(x => x.sku === sku);
+        const it = Views.pos.cart.find(x => x.sku === sku);
+        if (it) { if (it.qty < p.stock) it.qty++; else UI.toast("Stock máximo alcanzado.", "warning"); }
+        else Views.pos.cart.push({ sku: p.sku, name: p.name, price: p.price, qty: 1 });
+        renderCart();
+      };
+
+      document.getElementById("pos-search").addEventListener("input", e => renderGrid(e.target.value));
+      document.getElementById("pos-charge").onclick = async () => {
+        const cart = Views.pos.cart;
+        if (!cart.length) return UI.toast("El carrito está vacío.", "warning");
+        const customer = document.getElementById("pos-customer").value.trim() || "Cliente de mostrador";
+        const total = cart.reduce((a, it) => a + it.price * it.qty, 0);
+        const soNum = Math.max(2201, ...DB.orders.map(o => parseInt(o.id.split("-")[1]) || 0)) + 1;
+        const facNum = Math.max(2098, ...DB.invoices.map(i => parseInt(i.id.split("-")[1]) || 0)) + 1;
+        const order = { id: "SO-" + soNum, customer, items: cart.reduce((a, it) => a + it.qty, 0), total, status: "Completada", date: "04 Jul 2026", channel: "Directo" };
+        const invoice = { id: "FAC-" + facNum, customer, date: "04 Jul 2026", due: "04 Jul 2026", total, status: "Pagada", compliance: "Validada" };
+        await Store.upsert("orders", order);
+        await Store.upsert("invoices", invoice);
+        for (const it of cart) {
+          const p = DB.products.find(x => x.sku === it.sku);
+          p.stock -= it.qty;
+          await Store.upsert("products", p);
+        }
+        Store.log("CREATE", "Ventas", `Venta POS ${order.id} → ${invoice.id} (${customer}, ${fmt.money(total)})`);
+        Views.pos.cart = [];
+        renderCart(); renderGrid();
+        UI.toast(`Pedido ${order.id} y factura ${invoice.id} creados; stock actualizado.`, "success", "💰 Venta completada");
+        Views.facturacion.preview(invoice);
+      };
+
+      renderGrid(); renderCart();
+    }
+  },
+
+  /* ================= PROYECTOS (KANBAN DE TAREAS) ================= */
+  proyectos: {
+    title: "Proyectos", crumbs: ["Inicio", "Gestión", "Proyectos"],
+    stages: ["Por hacer", "En curso", "Hecho"],
+    render(el) {
+      if (!DB.projects.length && !DB.tasks.length) {
+        el.innerHTML = `${pageHeader("Proyectos", "Gestión de proyectos y tareas del equipo")}
+        <div class="card p-xl text-center space-y-md">
+          ${UI.icon("view_kanban", "text-[48px] text-indigo-acc block mx-auto")}
+          <h3 class="text-headline-sm text-on-surface">Activa el módulo de Proyectos</h3>
+          <p class="text-body-md text-on-surface-variant max-w-md mx-auto">Ejecuta <code class="px-1.5 py-0.5 rounded bg-surface-container-high text-[12px]">supabase/upgrade.sql</code> en el SQL Editor de tu proyecto de Supabase para crear las tablas de proyectos y tareas, y recarga la página.</p>
+          <button class="btn-primary mx-auto" id="proj-demo">${UI.icon("add", "text-[18px]")} O crea tu primer proyecto ahora</button>
+        </div>`;
+        document.getElementById("proj-demo").onclick = () => Views.proyectos.newProject(el);
+        return;
+      }
+      const progress = (pid) => {
+        const ts = DB.tasks.filter(t => t.project_id === pid);
+        return ts.length ? Math.round(ts.filter(t => t.status === "Hecho").length / ts.length * 100) : 0;
+      };
+      el.innerHTML = `
+      ${pageHeader("Proyectos", `${DB.projects.length} proyectos · ${DB.tasks.length} tareas`, `
+        <button class="btn-ghost" id="new-project">${UI.icon("create_new_folder", "text-[18px]")} Nuevo Proyecto</button>
+        <button class="btn-primary" id="new-task">${UI.icon("add_task", "text-[18px]")} Nueva Tarea</button>`)}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+        ${DB.projects.map(p => `
+        <div class="card card-hover p-lg">
+          <div class="flex justify-between items-start gap-md">
+            <div><p class="font-semibold text-body-lg text-on-surface">${p.name}</p>
+            <p class="text-label-md text-on-surface-variant">Responsable: ${p.owner} · Entrega: ${p.due}</p></div>
+            ${UI.badge(p.status, p.status === "Activo" ? "info" : "success")}
+          </div>
+          <div class="flex items-center gap-md mt-md">
+            <div class="stock-bar flex-1"><div class="brand-gradient" style="width:${progress(p.id)}%"></div></div>
+            <span class="text-body-md font-semibold text-on-surface">${progress(p.id)}%</span>
+          </div>
+        </div>`).join("")}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+        ${Views.proyectos.stages.map(stage => {
+          const tasks = DB.tasks.filter(t => t.status === stage);
+          return `
+          <div class="kanban-col rounded-xl bg-surface-container/50 border border-outline-variant/20 flex flex-col" data-stage="${stage}">
+            <div class="px-md py-sm flex items-center justify-between border-b border-outline-variant/20">
+              <span class="font-semibold text-body-md text-on-surface">${stage}</span>
+              <span class="badge badge-neutral">${tasks.length}</span>
+            </div>
+            <div class="p-sm space-y-sm flex-1 min-h-[140px]">
+              ${tasks.map(t => {
+                const prio = t.priority === "Alta" ? "error" : t.priority === "Media" ? "warning" : "info";
+                const proj = DB.projects.find(p => p.id === t.project_id);
+                return `
+                <div class="kanban-card card p-md space-y-xs" draggable="true" data-task="${t.id}">
+                  <div class="flex justify-between items-start gap-xs">
+                    <p class="font-semibold text-body-md text-on-surface leading-tight">${t.title}</p>
+                    <span class="badge badge-${prio}">${t.priority}</span>
+                  </div>
+                  <p class="text-label-md text-on-surface-variant">${proj?.name || "—"}</p>
+                  <div class="flex justify-between items-center pt-xs border-t border-outline-variant/15">
+                    <span class="flex items-center gap-xs text-label-md text-on-surface-variant">${UI.avatar(t.assignee || "?", t.id)} ${t.assignee}</span>
+                    <span class="text-label-md text-on-surface-variant">${t.due}</span>
+                  </div>
+                </div>`;
+              }).join("")}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
+
+      // drag & drop de tareas
+      let dragged = null;
+      el.querySelectorAll(".kanban-card").forEach(card => {
+        card.addEventListener("dragstart", () => { dragged = card; setTimeout(() => card.classList.add("dragging"), 0); });
+        card.addEventListener("dragend", () => { card.classList.remove("dragging"); dragged = null; });
+      });
+      el.querySelectorAll(".kanban-col").forEach(col => {
+        col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("drag-over"); });
+        col.addEventListener("dragleave", () => col.classList.remove("drag-over"));
+        col.addEventListener("drop", async e => {
+          e.preventDefault(); col.classList.remove("drag-over");
+          if (!dragged) return;
+          const task = DB.tasks.find(t => t.id === parseInt(dragged.dataset.task));
+          const newStage = col.dataset.stage;
+          if (task && task.status !== newStage) {
+            task.status = newStage;
+            await Store.upsert("tasks", task);
+            Store.log("UPDATE", "Proyectos", `Tarea "${task.title}" → ${newStage}`);
+            Views.proyectos.render(el);
+            UI.toast(`"${task.title}" movida a ${newStage}.`, newStage === "Hecho" ? "success" : "info");
+          }
+        });
+      });
+
+      document.getElementById("new-project").onclick = () => Views.proyectos.newProject(el);
+      document.getElementById("new-task").onclick = () => {
+        if (!DB.projects.length) return UI.toast("Crea primero un proyecto.", "warning");
+        UI.formModal({
+          title: "Nueva Tarea", wide: false,
+          fields: [
+            { name: "title", label: "Título" },
+            { name: "project_id", label: "Proyecto", type: "select", options: DB.projects.map(p => p.id + " · " + p.name) },
+            { name: "assignee", label: "Asignada a", type: "select", options: DB.employees.map(e => e.name) },
+            { name: "priority", label: "Prioridad", type: "select", options: ["Alta", "Media", "Baja"] },
+            { name: "due", label: "Fecha límite", value: "15 Ago" }
+          ],
+          onSave: async (data, close) => {
+            const row = { id: Math.max(0, ...DB.tasks.map(t => t.id)) + 1, status: "Por hacer", ...data, project_id: parseInt(data.project_id) };
+            await Store.upsert("tasks", row);
+            Store.log("CREATE", "Proyectos", `Tarea creada: ${row.title}`);
+            close(); Views.proyectos.render(el);
+            UI.toast("Tarea añadida al tablero.", "success");
+          }
+        });
+      };
+    },
+
+    newProject(el) {
+      UI.formModal({
+        title: "Nuevo Proyecto", wide: false,
+        fields: [
+          { name: "name", label: "Nombre del proyecto" },
+          { name: "owner", label: "Responsable", type: "select", options: DB.employees.map(e => e.name) },
+          { name: "due", label: "Fecha de entrega", value: "30 Sep 2026" }
+        ],
+        onSave: async (data, close) => {
+          const row = { id: Math.max(0, ...DB.projects.map(p => p.id)) + 1, status: "Activo", ...data };
+          await Store.upsert("projects", row);
+          Store.log("CREATE", "Proyectos", `Proyecto creado: ${row.name}`);
+          close(); Views.proyectos.render(el);
+          UI.toast("Proyecto creado.", "success", row.name);
+        }
+      });
+    }
+  },
+
+  /* ================= CALENDARIO RRHH ================= */
+  calendario: {
+    title: "Calendario", crumbs: ["Inicio", "Capital Humano", "Calendario"],
+    render(el) {
+      const daysInMonth = 31, firstDow = 3; // Julio 2026 empieza miércoles
+      const today = 4;
+      const events = DB.hr.requests
+        .filter(r => r.status !== "Rechazado" && /\d/.test(r.range))
+        .map((r, i) => {
+          const start = parseInt(r.range.match(/\d+/)[0]);
+          return { start, len: Math.max(r.days, 1), emp: r.emp, type: r.type, status: r.status,
+                   color: ["indigo-acc", "cyan-acc", "purple-acc", "success", "warning"][i % 5] };
+        });
+      const holidays = { 25: "Anexión de Guanacaste" };
+
+      const cells = [];
+      for (let i = 0; i < firstDow; i++) cells.push(`<div class="min-h-[92px]"></div>`);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dayEvents = events.filter(e => d >= e.start && d < e.start + e.len);
+        cells.push(`
+        <div class="min-h-[92px] rounded-lg border ${d === today ? "border-indigo-acc/60 bg-indigo-acc/[.06]" : "border-outline-variant/15 bg-surface-container-low/50"} p-1.5 space-y-1 overflow-hidden">
+          <div class="flex justify-between items-center">
+            <span class="text-label-md font-bold ${d === today ? "w-5 h-5 rounded-full brand-gradient text-white flex items-center justify-center" : "text-on-surface-variant"}">${d}</span>
+            ${holidays[d] ? UI.icon("celebration", "text-warning text-[14px]") : ""}
+          </div>
+          ${holidays[d] ? `<p class="text-[10px] text-warning font-semibold leading-tight">${holidays[d]}</p>` : ""}
+          ${dayEvents.slice(0, 2).map(e => `
+            <div class="text-[10px] font-semibold px-1.5 py-0.5 rounded truncate bg-${e.color}/15 text-${e.color} ${e.status === "Pendiente" ? "opacity-60 border border-dashed border-current" : ""}" title="${e.emp} · ${e.type} (${e.status})">
+              ${e.emp.split(" ")[0]} · ${e.type}
+            </div>`).join("")}
+          ${dayEvents.length > 2 ? `<p class="text-[10px] text-on-surface-variant">+${dayEvents.length - 2} más</p>` : ""}
+        </div>`);
+      }
+
+      el.innerHTML = `
+      ${pageHeader("Calendario de RRHH", "Vacaciones, licencias y eventos del equipo · Julio 2026", `
+        <div class="flex items-center gap-sm">
+          <button class="btn-ghost !px-2.5">${UI.icon("chevron_left", "text-[18px]")}</button>
+          <span class="font-semibold text-body-lg text-on-surface px-sm">Julio 2026</span>
+          <button class="btn-ghost !px-2.5">${UI.icon("chevron_right", "text-[18px]")}</button>
+        </div>`)}
+      <div class="card p-lg overflow-x-auto">
+        <div class="min-w-[640px]">
+          <div class="grid grid-cols-7 gap-1.5 mb-sm">
+            ${["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map(d => `<div class="text-center text-label-sm text-on-surface-variant uppercase py-xs">${d}</div>`).join("")}
+          </div>
+          <div class="grid grid-cols-7 gap-1.5">${cells.join("")}</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+        ${UI.panel("Ausencias del mes", `${events.length} registradas`, `
+          <div class="space-y-sm">${events.map(e => `
+            <div class="flex items-center gap-md p-sm rounded-lg hover:bg-surface-container/60 transition-colors">
+              ${UI.avatar(e.emp, e.start)}
+              <div class="flex-1"><p class="text-body-md font-medium text-on-surface">${e.emp}</p>
+              <p class="text-label-md text-on-surface-variant">${e.type} · del ${e.start} al ${e.start + e.len - 1} de Julio</p></div>
+              ${UI.badge(e.status)}
+            </div>`).join("") || `<p class="text-body-md text-on-surface-variant text-center py-md">Sin ausencias este mes 🎉</p>`}</div>`)}
+        ${UI.panel("Cobertura del equipo", "Personal disponible por semana", UI.barChart(
+          ["Sem 1", "Sem 2", "Sem 3", "Sem 4"],
+          [96, 88, 82, 91], [100, 100, 100, 100], "Disponibles %", "Plantilla"))}
+      </div>`;
     }
   }
 };
